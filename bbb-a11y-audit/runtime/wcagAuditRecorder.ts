@@ -140,7 +140,9 @@ export function announcementRecorderScript() {
         const region = target?.closest(SELECTOR);
         if (region) touched.add(region);
       });
-      touched.forEach((region) => {
+      // Nested live regions repeat the same text: keep only the outermost one touched in this batch.
+      const outermost = Array.from(touched).filter((r) => !Array.from(touched).some((o) => o !== r && o.contains(r)));
+      outermost.forEach((region) => {
         const full = (region.textContent || '').replace(/\s+/g, ' ').trim();
         const previous = lastText.get(region) || '';
         if (!full) {
@@ -167,7 +169,8 @@ export function announcementRecorderScript() {
           role,
           text: text.slice(0, 240),
           region: describe(region),
-          regionCreatedWithMessage: seen !== undefined && now - seen < 100,
+          // role=alert is announced when it is inserted, so only other regions risk being skipped.
+          regionCreatedWithMessage: role !== 'alert' && seen !== undefined && now - seen < 100,
         });
       });
     });
