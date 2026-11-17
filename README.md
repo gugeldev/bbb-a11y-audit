@@ -12,7 +12,7 @@ Each finding comes with the criterion, evidence, a screenshot with the problem m
 
 ## Install
 
-1. Copy `a11y-audit/` into your agent's skills folder. It uses the standard `SKILL.md` format.
+1. Copy `bbb-a11y-audit/` into your agent's skills folder. It uses the standard `SKILL.md` format.
 2. Copy `playwright/*.ts` into `bigbluebutton-tests/playwright/accessibility/`.
 3. Run `npm install @axe-core/playwright` in `bigbluebutton-tests/playwright`.
 4. Set `BBB_URL` and `BBB_SECRET` in that folder's `.env`. This is optional: without a server, the runtime layer is skipped.

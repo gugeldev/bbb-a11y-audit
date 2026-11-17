@@ -333,7 +333,7 @@ details.ann > summary:hover { background: var(--soft-2); }
 <div class="wrap">
   <div class="topbar">
     <div class="brand">
-      a11y-audit <span class="sep">/</span> <span class="proj" id="proj"></span>
+      bbb-a11y-audit <span class="sep">/</span> <span class="proj" id="proj"></span>
     </div>
     <span class="example" id="example" hidden>Dados de exemplo</span>
   </div>
@@ -767,7 +767,7 @@ __DATA__
   $('foot-l').textContent = 'Camadas: ' + (D.meta.layers || []).map(function (l) { return l.name + (l.ran ? '' : ' (não executada' + (l.reason ? ': ' + l.reason : '') + ')'); }).join(' · ');
   $('foot-r').textContent = prev
     ? 'Comparado com ' + (TOPIC && D.meta.previousRunScope === 'full' ? 'a auditoria completa de ' : (TOPIC ? 'a última auditoria deste tópico, de ' : '')) + prev
-    : 'Gerado por /a11y-audit';
+    : 'Gerado por /bbb-a11y-audit';
   if (TOPIC) {
     var topicName = TOPIC.map(function (s) { return s + (GUIDE[s] ? ' ' + GUIDE[s] : (PRINCIPLES[s] ? ' ' + PRINCIPLES[s][0] : (CRIT[s] ? ' ' + CRIT[s].name : ''))); }).join(', ');
     $('verdict-label').textContent = 'Tópico: ' + topicName;

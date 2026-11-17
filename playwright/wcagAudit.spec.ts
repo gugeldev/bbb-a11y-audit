@@ -22,7 +22,7 @@ import {
 } from './wcagAuditRecorder';
 
 /**
- * WCAG 2.2 AA runtime audit used by the a11y-audit agent skill.
+ * WCAG 2.2 AA runtime audit used by the bbb-a11y-audit agent skill.
  *
  * This is an audit, not a regression test: it never fails because of violations. Each test is one
  * scenario (moderator tour, multi-user interactions, guest lobby, locale, dark theme, mobile) and

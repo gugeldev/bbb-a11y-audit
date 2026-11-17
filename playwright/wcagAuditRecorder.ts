@@ -4,7 +4,7 @@ import { mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 /**
- * Recording helpers for wcagAudit.spec.ts (runtime layer of the a11y-audit agent skill).
+ * Recording helpers for wcagAudit.spec.ts (runtime layer of the bbb-a11y-audit agent skill).
  *
  * Every audited state stores: axe violations and incomplete results (with the on-screen box of each
  * node), a JPEG screenshot of the viewport and the boxes of every visible element that has a

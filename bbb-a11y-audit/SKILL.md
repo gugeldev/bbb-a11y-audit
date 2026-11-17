@@ -1,13 +1,13 @@
 ---
-name: a11y-audit
-description: Audit the BigBlueButton HTML5 client against WCAG 2.2 level A and AA (EN 301 549 clause 9) and produce a prioritized HTML report of findings, each with criterion, evidence, fix, how to verify, impact and effort. Combines a static scan, an axe-core/Playwright run against a live meeting and a guided code review, and compares with previous runs (new, regressed, fixed). Use when the user asks for an accessibility or WCAG audit, an a11y report, to check a component, folder or criterion for accessibility, or to review a branch's changes for accessibility regressions.
+name: bbb-a11y-audit
+description: Audit the BigBlueButton HTML5 client against WCAG 2.2 level A and AA (EN 301 549 clause 9), one topic at a time (a guideline, a principle or a criterion) or the whole client, and produce an HTML report organized by principle, guideline and criterion, where every criterion ends failing, passing or not applicable, with evidence, annotated screenshots, fixes and priorities. Combines a static scan, an axe-core/Playwright run against a live meeting and a guided code review, and compares with the previous run of the same topic. Use when the user asks for an accessibility or WCAG audit, to audit a guideline or criterion, for an a11y report, or to check a component or a branch for accessibility regressions.
 ---
 
 # Accessibility audit (WCAG 2.2 AA)
 
 Produce an honest, prioritized list of accessibility problems that can be turned into small tasks. The audit is **read-only**: do not change application code while auditing, even for obvious fixes. Fixing is a separate request.
 
-Skill directory: the folder that contains this SKILL.md (below: `$SKILL`; in this repository usually `.claude/skills/a11y-audit`). References, read when the step needs them:
+Skill directory: the folder that contains this SKILL.md (below: `$SKILL`; in this repository usually `.claude/skills/bbb-a11y-audit`). References, read when the step needs them:
 
 - `references/criteria.md`: the 55 criteria, which layer can evaluate each, BBB hotspots, coverage rules
 - `references/rubric.md`: impact, effort, priority, grouping, stable keys, the `findings.input.json` schema
@@ -21,11 +21,11 @@ The normal way to work is **one topic at a time**: pick a guideline, audit every
 
 | Invocation | Mode | Scope |
 | --- | --- | --- |
-| `/a11y-audit diretriz 2.1` (or `guideline`; several: `diretriz 2.1 2.4`; a whole principle: `principio 2`) | `guideline` | every criterion of the topic, across the whole client and every flow, decided completely. Everything else is left out of the run and of the report. |
-| `/a11y-audit criterio 2.4.7` (or `criterion`) | `criterion` | one or more criteria, same depth |
-| `/a11y-audit` or `full` | `full` | all 55 criteria (overview / map) |
-| `/a11y-audit <path>` | `path` | that folder or file, all criteria |
-| `/a11y-audit diff [base]` | `diff` | files changed vs `git merge-base HEAD <base>` (default base: the repo main branch, `v4.0.x-develop`) under `bigbluebutton-html5/` |
+| `/bbb-a11y-audit diretriz 2.1` (or `guideline`; several: `diretriz 2.1 2.4`; a whole principle: `principio 2`) | `guideline` | every criterion of the topic, across the whole client and every flow, decided completely. Everything else is left out of the run and of the report. |
+| `/bbb-a11y-audit criterio 2.4.7` (or `criterion`) | `criterion` | one or more criteria, same depth |
+| `/bbb-a11y-audit` or `full` | `full` | all 55 criteria (overview / map) |
+| `/bbb-a11y-audit <path>` | `path` | that folder or file, all criteria |
+| `/bbb-a11y-audit diff [base]` | `diff` | files changed vs `git merge-base HEAD <base>` (default base: the repo main branch, `v4.0.x-develop`) under `bigbluebutton-html5/` |
 | add `--no-runtime` | | skip the runtime layer |
 
 If the request is ambiguous, pick the closest mode and say which one you used. Do not ask.
