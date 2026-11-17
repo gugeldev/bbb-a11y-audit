@@ -471,8 +471,7 @@ __DATA__
   }).join('');
 
   // Abas
-  var TOTAL_STATES = (D.scenarios || []).reduce(function (n, s) { return n + s.states.length; }, 0);
-  var TABS = [['achados', 'Achados', F.length, 'list-checks'], ['cobertura', 'O que foi testado', TOTAL_STATES, 'eye'], ['criterios', 'Critérios', CRITERIA.length, 'squares-four'], ['leitor', 'Leitor de tela', D.manualChecks.length, 'headphones'], ['corrigidos', 'Corrigidos', D.fixed.length, 'check-circle']];
+  var TABS = [['achados', 'Achados', F.length, 'list-checks'], ['cobertura', 'O que foi testado', (D.scenarios || []).length + ' cenários', 'eye'], ['criterios', 'Critérios', CRITERIA.length, 'squares-four'], ['leitor', 'Leitor de tela', D.manualChecks.length, 'headphones'], ['corrigidos', 'Corrigidos', D.fixed.length, 'check-circle']];
   $('tabs').innerHTML = TABS.map(function (t, i) {
     return '<button role="tab" id="tab-' + t[0] + '" aria-controls="panel-' + t[0] + '" aria-selected="' + (i === 0) + '" tabindex="' + (i ? -1 : 0) + '">' + t[1] + '<span class="n">' + t[2] + '</span></button>';
   }).join('');
@@ -575,6 +574,9 @@ __DATA__
                 '<div><dt>Origem</dt><dd>' + SOURCE[f.source] + '</dd></div>' +
                 '<div><dt>EN 301 549</dt><dd class="mono">' + esc(f.en) + '</dd></div>' +
                 '<div class="wide"><dt>Arquivo</dt><dd class="mono">' + esc(fileLine(f)) + '</dd></div>' +
+                ((f.relatedLocations || []).length
+                  ? '<div class="wide"><dt>Também em</dt><dd class="mono">' + f.relatedLocations.map(function (l) { return esc(l.file + (l.line ? ':' + l.line : '')); }).join('<br>') + '</dd></div>'
+                  : '') +
               '</dl>' +
             '</div></details></li>';
         }).join('') + '</ul></section>';
@@ -620,6 +622,7 @@ __DATA__
         }).join('') + '</div>' : '') +
         (s.announcements.length ? '<details class="ann"><summary>O que seria anunciado ao leitor de tela<span class="n">' + s.announcements.length + '</span></summary><ul class="ann-list">' +
           s.announcements.map(function (a) {
+            if (a.none) return '<li><span class="when">' + esc(a.actor) + '</span><span class="txt"><b>Nenhum anúncio.</b></span></li>';
             return '<li><span class="when">' + esc(a.actor) + ' · ' + esc(a.politeness) + (a.regionCreatedWithMessage ? ' · região criada junto com a mensagem (pode não ser lida)' : '') + '</span><span class="txt">' + esc(a.text) + '</span></li>';
           }).join('') + '</ul></details>' : '') +
         '</div></section>';

@@ -7,9 +7,11 @@ Judge impact by **who is blocked from what**, not by how many rules fire.
 | Impact | Meaning | Examples |
 | --- | --- | --- |
 | `blocker` | A group of users cannot complete a core task at all. | Mute button with no accessible name; keyboard trap in the audio modal; leaving the meeting impossible without a mouse. |
-| `high` | A Level A criterion fails in a core flow, or a core task is possible but very hard. | Focus not visible in the user list; chat messages never announced; reflow forces two-way scrolling in the chat. |
+| `high` | A core task is possible but very hard for a group of users (typically a Level A failure in a core flow). | Focus not visible in the user list; chat messages never announced; reflow forces two-way scrolling in the chat. |
 | `medium` | A Level AA failure, or a Level A failure in a secondary flow. | Reaction buttons under 24×24 px; error shown only in red in the poll form. |
 | `low` | Edge case, cosmetic, or a workaround is easy. | Missing `autocomplete` on a rarely used field. |
+
+Judge by the effect on people first, the level second. A Level A failure in a core flow that costs a user little (a redundant or slightly mismatched label, a decorative glitch) is `medium` or `low`; say why in `affects`.
 
 **Core flows** (see `bbb-map.md`): join, audio (join, mute, leave), chat, user list, presentation viewing, leaving the meeting. Everything else is secondary.
 
@@ -61,6 +63,12 @@ One finding = one fix. Group occurrences that share a root cause into one findin
 
 Do not use line numbers in keys: they move with unrelated edits.
 
+If the same problem from the previous run is now better located in another file, keep continuity by setting `"id"` to the previous finding's id explicitly (it overrides the derived one) and put the new place in `location`.
+
+## Several places, one fix
+
+`location` is where the fix mainly goes. When the same fix also touches other places (a component and the table that lists its shortcuts), add them as `"relatedLocations": [{ "file": "…", "line": 0 }]`. Different fixes are different findings.
+
 ## Text style
 
 Write `title`, `affects`, `fix` and `verify` in the language of the person running the audit (the report UI is in Portuguese). Plain, short sentences. `affects` says who is hurt and how, in user terms. `fix` says what to change and where. `verify` is a concrete check someone can repeat.
@@ -101,7 +109,7 @@ Write `title`, `affects`, `fix` and `verify` in the language of the person runni
       "affects": "Quem tem baixa visão não consegue ampliar a tela no celular.",
       "fix": "Remover maximum-scale=1 e user-scalable=no da meta viewport.",
       "verify": "No celular, ampliar com pinça deve funcionar; axe meta-viewport sem violações.",
-      "shots": [{ "state": "mobile/meeting-portrait", "rule": "meta-viewport", "caption": "Celular: zoom bloqueado" }]
+      "shots": []
     }
   ],
   "coverage": { "1.1.1": "pass", "1.2.1": "na", "2.1.1": "manual" },
@@ -120,8 +128,8 @@ Field rules:
 - `source`: `static`, `runtime` or `review` (the layer that found it).
 - `location.file`: repo-relative path of the place to fix. For runtime findings, trace the selector back to the source file; if you cannot, use the closest component directory and say so in `evidence`.
 - `coverage`: one entry per criterion that is **not** failing: `pass`, `manual`, `na` or `skip` (not evaluated in this mode). Failing criteria are derived from findings. Rules for choosing are in `criteria.md`.
-- `discarded`: every candidate you rejected (static pattern, eslint message, axe `incomplete`, custom runtime check), with the reason. Use `source` values like `static:outline-none`, `eslint:control-has-associated-label`, `axe:aria-valid-attr-value`, `runtime:keyboard.obscured`. This keeps triage honest and lets the next run skip known false positives.
-- `shots` (per finding, runtime findings especially): where the problem shows on screen. Each entry is `{ "state": "<scenario>/<state>", "rule": "<axe rule id>" }` (marks every node of that rule in that state; add `"target": "<substring of the axe target>"` to narrow it), or `{ "state": "…", "dataTest": "<data-test value>" }` (marks that element; also accepts a list), or explicit `"boxes": [{ "x", "y", "w", "h" }]` in CSS pixels of that state's viewport, plus an optional `"caption"`. `build-report.mjs` turns them into numbered markers on the screenshot. Add at least one shot to every runtime finding and to static or review findings whose element is visible in some state (find it in that state's `elements` map in `raw/runtime/<scenario>.json`).
+- `discarded`: every candidate you rejected (fields: `source`, `file` and `line` when it has them, `state` for runtime candidates, `reason`): static pattern, eslint message, axe `incomplete`, custom runtime check), with the reason. Use `source` values like `static:outline-none`, `eslint:control-has-associated-label`, `axe:aria-valid-attr-value`, `runtime:keyboard.obscured`. This keeps triage honest and lets the next run skip known false positives.
+- `shots` (per finding, runtime findings especially): where the problem shows on screen. Each entry is `{ "state": "<scenario>/<state>", "rule": "<axe rule id>" }` (marks every node of that rule in that state; add `"target": "<substring of the axe target>"` to narrow it), or `{ "state": "…", "dataTest": "<data-test value>" }` (marks that element; also accepts a list), or explicit `"boxes": [{ "x", "y", "w", "h" }]` in CSS pixels of that state's viewport, plus an optional `"caption"`. `build-report.mjs` turns them into numbered markers on the screenshot. Add at least one shot to every runtime finding and to static or review findings whose element is visible in some state (find it in that state's `elements` map in `raw/runtime/<scenario>.json`). Leave `shots` empty when the problem has no box on screen (a `<meta>` tag, the `lang` attribute, an announcement that never happens). Example: `{ "state": "moderator/meeting", "rule": "nested-interactive", "caption": "Botões aninhados na barra de ações" }`.
 - `meta.summary`, `meta.reviewedFlows` and `meta.notCovered` fill the "O que foi testado" tab. List every flow you read in the guided review, and every flow, state or criterion area that nothing covered, with the reason (state failed to open, needs a device, out of scope).
 - `meta.layers[].detail` (optional) is shown under each layer, e.g. "6 cenários, 60 telas".
 - `meta.layers[].id` must be `static`, `runtime` or `review`: `build-report.mjs` only marks an old finding as fixed when the layer that found it ran again.

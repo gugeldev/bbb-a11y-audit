@@ -11,6 +11,7 @@ import { findNonTextContrastViolations } from './nonTextContrast';
 import {
   auditOutDir,
   AuditRecorder,
+  checkFocusReturn,
   checkKeyboard,
   checkReflow,
   checkTextSpacing,
@@ -113,6 +114,19 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
         },
       );
       await standardChecks(rec, p);
+      await rec.check('focusReturn', async () => {
+        const results = [];
+        for (const trigger of [
+          e.audioDropdownMenu,
+          e.mediaAreaButton,
+          e.optionsButton,
+          e.leaveMeetingDropdown,
+          e.settingsSidebarButton,
+        ]) {
+          results.push(await checkFocusReturn(p, trigger));
+        }
+        return results;
+      });
       await rec.state(p, 'audio-menu', 'Menu de áudio', 'Menu de dispositivos e saída do áudio.', {
         enter: () => mod.waitAndClick(e.audioDropdownMenu),
         leave: () => esc(p),
@@ -120,6 +134,7 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
       await rec.state(p, 'user-list', 'Lista de usuários', 'Painel de participantes.', {
         enter: () => openUserListIfClosed(mod),
       });
+      await rec.check('keyboard-user-list', () => checkKeyboard(p, 60));
       await rec.state(
         p,
         'user-item-menu',
@@ -143,6 +158,7 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
           await sendChatMessage(mod, 'Mensagem de teste da auditoria');
         },
       });
+      await rec.check('keyboard-public-chat', () => checkKeyboard(p, 60));
       await rec.state(p, 'chat-options', 'Opções do chat', 'Menu de opções do chat (salvar, copiar, limpar).', {
         enter: () => mod.waitAndClick(e.chatOptions),
         leave: () => esc(p),
@@ -150,6 +166,8 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
       await rec.state(p, 'settings', 'Configurações', 'Modal de configurações, aba inicial.', {
         enter: () => mod.waitAndClick(e.settingsSidebarButton),
       });
+      // Inside an open modal: focus must stay in the dialog (and not escape to the page behind it).
+      await rec.check('keyboard-settings-modal', () => checkKeyboard(p, 40));
       await rec.state(p, 'settings-shortcuts', 'Atalhos de teclado', 'Aba de atalhos dentro das configurações.', {
         enter: () => mod.waitAndClick(e.shortcutsTab),
         leave: () => mod.waitAndClick(e.saveSettingsButton),

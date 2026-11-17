@@ -38,7 +38,7 @@ The EN 301 549 clause for each is `9.` + the number (1.1.1 → 9.1.1.1).
 
 | SC | Lvl | How | What to check in BBB |
 | --- | --- | --- | --- |
-| 2.1.1 Keyboard | A | S R V | Every control reachable and operable by keyboard: custom dropdowns, whiteboard toolbar, video tiles menu, reactions, drag-only features. eslint: `click-events-have-key-events`, `interactive-supports-focus`, `no-static-element-interactions`. Runtime `keyboard` walk. Freehand drawing is the documented exception. |
+| 2.1.1 Keyboard | A | S R V | Every control reachable and operable by keyboard: custom dropdowns, whiteboard toolbar, video tiles menu, reactions, drag-only features. eslint: `click-events-have-key-events`, `interactive-supports-focus`, `no-static-element-interactions`. Runtime `keyboard` walk. Freehand drawing is the documented exception. The runtime walks only cover the states listed in `bbb-map.md`; other flows need the review, and stay `manual` if neither covered them. |
 | 2.1.2 No Keyboard Trap | A | R V | Runtime `keyboard.possibleTrap`; modals must close with Esc; focus traps in whiteboard and shared notes editors must have a way out. |
 | 2.1.4 Character Key Shortcuts | A | V | Single-key shortcuts (no modifier). BBB shortcuts use Alt+Shift (accesskey), which is fine. Check whiteboard (tldraw) single-letter tool shortcuts: can they be turned off or are they only active when the canvas has focus? |
 | 2.2.1 Timing Adjustable | A | V | Session or inactivity timeouts (activity check modal), auto-dismissing notifications/toasts with actions in them. |
@@ -46,7 +46,7 @@ The EN 301 549 clause for each is `9.` + the number (1.1.1 → 9.1.1.1).
 | 2.3.1 Three Flashes or Below Threshold | A | V | Flashing alerts or animations. Usually `pass` after review. |
 | 2.4.1 Bypass Blocks | A | R V | Skip link or landmarks (`main`, `nav`, `aside`). axe: `bypass`, `region`, `landmark-*`. |
 | 2.4.2 Page Titled | A | R | `document.title` per view. Covered by `accessibility/document-title.spec.ts`. |
-| 2.4.3 Focus Order | A | S R V | tabindex > 0, focus moved into modals and returned to the trigger on close, order matches layout. |
+| 2.4.3 Focus Order | A | S R V | tabindex > 0, focus moved into modals and returned to the trigger on close, order matches layout. Runtime `focusReturn` shows where focus lands after closing each menu or modal. |
 | 2.4.4 Link Purpose (In Context) | A | R V | Links in chat and notes are user content (out of scope); app links need meaningful text. axe: `link-name`. |
 | 2.4.5 Multiple Ways | AA | V | Applies to sets of pages. The meeting client is a single application view: usually `na`, explain why. |
 | 2.4.6 Headings and Labels | AA | V | Panel headings and field labels describe the content (i18n strings). |

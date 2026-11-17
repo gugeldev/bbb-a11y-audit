@@ -66,6 +66,7 @@ interface Announcement {
   text: string;
   region: string;
   regionCreatedWithMessage: boolean;
+  none?: boolean;
 }
 
 type AxeResults = Awaited<ReturnType<AxeBuilder['analyze']>>;
@@ -264,6 +265,19 @@ export class AuditRecorder {
         return items;
       })
       .catch(() => [] as unknown[]);
+    if (!log.length) {
+      // Make silent moments explicit: an expected announcement that never came is a finding candidate.
+      this.announcements.push({
+        t: Date.now(),
+        actor,
+        politeness: 'none',
+        text: '',
+        region: '',
+        regionCreatedWithMessage: false,
+        none: true,
+      });
+      return;
+    }
     (log as Omit<Announcement, 'actor'>[]).forEach((item) => this.announcements.push({ ...item, actor }));
   }
 
@@ -371,6 +385,41 @@ export async function checkTextSpacing(page: PlaywrightPage) {
   const key = (item: { tag: string; className?: string; text: string }) => `${item.tag}|${item.className}|${item.text}`;
   const beforeKeys = new Set(before.map(key));
   return { newlyClipped: after.filter((item) => !beforeKeys.has(key(item))).slice(0, 25) };
+}
+
+/**
+ * 2.4.3 Focus Order: open a menu or modal from its trigger with the keyboard, close it with Escape,
+ * and report where focus went. Focus should come back to the trigger.
+ */
+export async function checkFocusReturn(page: PlaywrightPage, trigger: string) {
+  const describeActive = () =>
+    page.evaluate(() => {
+      const a = document.activeElement;
+      if (!a || a === document.body) return 'body';
+      const dt = a.getAttribute('data-test') || a.getAttribute('data-testid');
+      return `${a.tagName.toLowerCase()}${a.id ? `#${a.id}` : ''}${dt ? `[data-test=${dt}]` : ''}`;
+    });
+  try {
+    const loc = page.locator(trigger).first();
+    await loc.focus();
+    const focusable = await loc.evaluate((el) => el === document.activeElement);
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(SETTLE_MS);
+    const afterOpen = await describeActive();
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(SETTLE_MS);
+    const returned = await loc.evaluate((el) => el === document.activeElement || el.contains(document.activeElement));
+    return {
+      trigger,
+      triggerFocusable: focusable,
+      focusAfterOpen: afterOpen,
+      returnedToTrigger: returned,
+      focusAfterClose: await describeActive(),
+    };
+  } catch (err) {
+    await page.keyboard.press('Escape').catch(() => undefined);
+    return { trigger, error: String(err).split('\n')[0].slice(0, 200) };
+  }
 }
 
 /** 2.1.1 / 2.1.2 / 2.4.3 / 2.4.7 / 2.4.11: walk the page with Tab and describe every focus stop. */

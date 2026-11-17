@@ -70,14 +70,14 @@ The spec does not fail on violations. Each scenario is its own test, so one scen
 
 | Scenario (`id`) | What it does |
 | --- | --- |
-| `moderator` | Joins as moderator, connects audio and opens every panel, menu and modal it can (about 30 states). Runs the keyboard, reflow, text-spacing and non-text-contrast checks on the main state. |
+| `moderator` | Joins as moderator, connects audio and opens every panel, menu and modal it can (about 30 states). Runs keyboard walks on the main screen (`keyboard`), with the user list open (`keyboard-user-list`), with the chat open (`keyboard-public-chat`) and inside the settings modal (`keyboard-settings-modal`, focus must stay in the dialog); `focusReturn` (open each menu or modal from its trigger with Enter, close with Escape, report where focus lands); reflow, text spacing and non-text contrast on the main state. |
 | `interactions` | Moderator + attendee. Audits the attendee's screens; the attendee sends chat messages (moderator's chat open, then closed), raises a hand, answers a poll, gets a private message and leaves. Records the announcements each side receives. |
 | `guest` | Meeting with `guestPolicy=ASK_MODERATOR`. Guest lobby, moderator's waiting list, a lobby message, approval. Keyboard and reflow checks on the lobby. |
 | `locale-pt-br` | Client in pt-BR: `lang`, longer strings, text spacing, reflow. |
 | `dark-theme` | Dark mode turned on in settings: contrast. |
 | `mobile` | Pixel 7 emulation, portrait and landscape. |
 
-Output: `<scenario>.json` with `states[]` (each: `id`, `name`, `actor`, `ok`/`error`, `shot`, `viewport`, `lang`, axe `violations` and `incomplete` with `nodes[].target/html/summary/box`, and `elements`: the on-screen box of every visible `data-test`/`data-testid`), `checks` (`keyboard.stops[]` with boxes and `possibleTrap`, `reflow`, `textSpacing.newlyClipped[]`, `nonTextContrast`, plus notes), and `announcements[]` (`actor` = moment label, `politeness`, `text`, `regionCreatedWithMessage`). Screenshots are in `shots/`. Refer to a state as `<scenario>/<state id>` in a finding's `shots`.
+Output: `<scenario>.json` with `states[]` (each: `id`, `name`, `actor`, `ok`/`error`, `shot`, `viewport`, `lang`, axe `violations` and `incomplete` with `nodes[].target/html/summary/box`, and `elements`: the on-screen box of every visible `data-test`/`data-testid`), `checks` (`keyboard.stops[]` with boxes and `possibleTrap`, `reflow`, `textSpacing.newlyClipped[]`, `nonTextContrast`, plus notes), and `announcements[]` (`actor` = moment label, `politeness`, `text`, `regionCreatedWithMessage`; an entry with `none: true` means nothing at all was announced in that moment). Screenshots are in `shots/`. Refer to a state as `<scenario>/<state id>` in a finding's `shots`.
 
 Environment artifacts, not findings: toasts such as "Error acquiring wake lock" or camera/microphone permission messages come from the headless, emulated test browser with fake devices. Ignore them unless the same thing would happen to a real user.
 

@@ -10,6 +10,11 @@ node $SKILL/scripts/static-scan.mjs <paths…> > <run>/raw/static.json
 $SKILL/scripts/eslint-a11y.sh <run>/raw/eslint.json <paths…>
 ```
 
+File formats:
+
+- `static.json`: `{ scannedFiles, roots, patterns[], counts, hits[] }`. Each entry of `hits` is a candidate: `{ pattern, criterion, standard, file, line, snippet }` (`file` is repo-relative; `snippet` is the matched text, up to 200 characters). Read the file at `file:line` for context before deciding.
+- `eslint.json`: standard eslint JSON output: one object per file `{ filePath (repo-relative), messages[] }`, each message `{ ruleId, line, column, message }`.
+
 `eslint-a11y.sh` installs eslint 8 + jsx-a11y + the TypeScript parser once into `~/.cache/a11y-audit-eslint` (needs network the first time) and ignores the project eslint config and all inline `eslint-disable` comments.
 
 **Known limit:** the client renders most controls through styled-components (`<Styled.Button>`, `<Styled.Item>`) and wrappers from `@bigbluebutton/bbb-ui-components-react`. jsx-a11y cannot see the native element behind them, so it reports little. The runtime layer and guided review carry most of the weight; do not read a low eslint count as a good result.

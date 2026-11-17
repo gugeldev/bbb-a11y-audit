@@ -142,6 +142,7 @@ const findings = (input.findings || []).map((f, i) => {
     source: f.source,
     confidence: f.confidence || 'confirmed',
     location,
+    relatedLocations: (f.relatedLocations || []).map((l) => ({ file: '', line: 0, ...l })),
     occurrences: f.occurrences || 1,
     shared: !!f.shared,
     external: !!f.external,
