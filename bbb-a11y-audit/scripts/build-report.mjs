@@ -1,0 +1,273 @@
+#!/usr/bin/env node
+/**
+ * Builds findings.json and report.html for one audit run.
+ *
+ *   node build-report.mjs <run-dir>
+ *
+ * Reads  <run-dir>/raw/findings.input.json  (written by the agent, schema in references/rubric.md)
+ * Writes <run-dir>/findings.json            (enriched: id, priority, EN clause, status vs previous runs)
+ *        <run-dir>/report.html              (self-contained report from templates/report.html)
+ *
+ * Previous runs are the sibling directories of <run-dir> that contain a findings.json; they are
+ * compared by name, so run directories must be named so they sort chronologically (YYYY-MM-DD_HHMM).
+ */
+import { createHash } from 'node:crypto';
+import { execSync } from 'node:child_process';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const TEMPLATE = join(HERE, '..', 'templates', 'report.html');
+
+const IMPACTS = ['blocker', 'high', 'medium', 'low'];
+const EFFORTS = ['S', 'M', 'L'];
+const SOURCES = ['static', 'runtime', 'review'];
+const MATRIX = { blocker: { S: 1, M: 1, L: 2 }, high: { S: 1, M: 2, L: 3 }, medium: { S: 2, M: 3, L: 3 }, low: { S: 3, M: 4, L: 4 } };
+const WCAG = new Set(
+  (
+    '1.1.1 1.2.1 1.2.2 1.2.3 1.2.4 1.2.5 1.3.1 1.3.2 1.3.3 1.3.4 1.3.5 1.4.1 1.4.2 1.4.3 1.4.4 1.4.5 1.4.10 1.4.11 1.4.12 1.4.13 ' +
+    '2.1.1 2.1.2 2.1.4 2.2.1 2.2.2 2.3.1 2.4.1 2.4.2 2.4.3 2.4.4 2.4.5 2.4.6 2.4.7 2.4.11 2.5.1 2.5.2 2.5.3 2.5.4 2.5.7 2.5.8 ' +
+    '3.1.1 3.1.2 3.2.1 3.2.2 3.2.3 3.2.4 3.2.6 3.3.1 3.3.2 3.3.3 3.3.4 3.3.7 3.3.8 4.1.2 4.1.3'
+  ).split(' '),
+);
+if (WCAG.size !== 55) throw new Error(`criteria list has ${WCAG.size} entries, expected 55`);
+
+function fail(msg) {
+  console.error(`build-report: ${msg}`);
+  process.exit(1);
+}
+
+const runDir = resolve(process.argv[2] || fail('usage: node build-report.mjs <run-dir>'));
+const inputPath = join(runDir, 'raw', 'findings.input.json');
+if (!existsSync(inputPath)) fail(`missing ${inputPath}`);
+
+let input;
+try {
+  input = JSON.parse(readFileSync(inputPath, 'utf8'));
+} catch (err) {
+  fail(`invalid JSON in ${inputPath}: ${err.message}`);
+}
+
+const git = (cmd) => {
+  try {
+    return execSync(`git ${cmd}`, { cwd: runDir, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+  } catch {
+    return '';
+  }
+};
+
+const problems = [];
+const warnings = [];
+
+// ---------- Runtime scenarios and screenshots ----------
+// wcagAudit.spec.ts writes one JSON per scenario plus shots/ into raw/runtime (A11Y_AUDIT_DIR).
+const SCENARIO_ORDER = ['moderator', 'interactions', 'guest', 'locale-pt-br', 'dark-theme', 'mobile'];
+const runtimeDir = join(runDir, 'raw', 'runtime');
+const scenarios = existsSync(runtimeDir)
+  ? readdirSync(runtimeDir)
+      .filter((n) => n.endsWith('.json'))
+      .map((n) => JSON.parse(readFileSync(join(runtimeDir, n), 'utf8')))
+      .sort((a, b) => {
+        const ia = SCENARIO_ORDER.indexOf(a.id);
+        const ib = SCENARIO_ORDER.indexOf(b.id);
+        return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || String(a.id).localeCompare(String(b.id));
+      })
+  : [];
+const stateIndex = new Map();
+const shots = {};
+for (const s of scenarios) {
+  for (const st of s.states || []) {
+    const key = `${s.id}/${st.id}`;
+    stateIndex.set(key, st);
+    if (st.shot && existsSync(join(runtimeDir, st.shot))) {
+      shots[key] = `data:image/jpeg;base64,${readFileSync(join(runtimeDir, st.shot)).toString('base64')}`;
+    }
+  }
+}
+
+/**
+ * A finding points at screenshots with {state, rule?, target?, dataTest?, boxes?, caption?}.
+ * Boxes are resolved from the runtime data so the agent never measures pixels by hand.
+ */
+function resolveShot(ref, where) {
+  const st = stateIndex.get(ref.state);
+  if (!st) {
+    problems.push(`${where}: shots[].state "${ref.state}" does not exist (use "<scenario>/<state>" from raw/runtime/*.json)`);
+    return null;
+  }
+  const boxes = [...(ref.boxes || [])];
+  if (ref.rule) {
+    const nodes = [...(st.violations || []), ...(st.incomplete || [])]
+      .filter((r) => r.id === ref.rule)
+      .flatMap((r) => r.nodes)
+      .filter((n) => n.box && (!ref.target || n.target.includes(ref.target)));
+    if (!nodes.length) warnings.push(`${where}: no on-screen node for rule "${ref.rule}" in ${ref.state}`);
+    boxes.push(...nodes.map((n) => n.box));
+  }
+  for (const dt of [].concat(ref.dataTest || [])) {
+    if (st.elements?.[dt]) boxes.push(st.elements[dt]);
+    else warnings.push(`${where}: data-test "${dt}" not visible in ${ref.state}`);
+  }
+  const unique = [...new Map(boxes.map((b) => [`${b.x},${b.y},${b.w},${b.h}`, b])).values()];
+  return { shot: ref.state, caption: ref.caption || '', boxes: unique, viewport: st.viewport || null };
+}
+
+// ---------- Validate and enrich findings ----------
+const findings = (input.findings || []).map((f, i) => {
+  const where = `findings[${i}] "${f.title || '?'}"`;
+  if (!f.title) problems.push(`${where}: missing title`);
+  if (!f.criterion) problems.push(`${where}: missing criterion`);
+  if (f.criterion && !WCAG.has(f.criterion) && f.standard !== 'EN') {
+    problems.push(`${where}: criterion ${f.criterion} is not a WCAG 2.2 A/AA criterion (set "standard": "EN" for EN 301 549 clauses)`);
+  }
+  if (!IMPACTS.includes(f.impact)) problems.push(`${where}: impact must be one of ${IMPACTS.join(', ')}`);
+  if (!EFFORTS.includes(f.effort)) problems.push(`${where}: effort must be one of ${EFFORTS.join(', ')}`);
+  if (!SOURCES.includes(f.source)) problems.push(`${where}: source must be one of ${SOURCES.join(', ')}`);
+  if (!f.location || !f.location.file) problems.push(`${where}: missing location.file`);
+
+  const location = { file: '', line: 0, selector: '', state: '', ...(f.location || {}) };
+  const key = f.key || `${f.source}:${location.selector || location.line || ''}`;
+  const id = f.id || `A11Y-${createHash('sha1').update(`${f.criterion}|${location.file}|${key}`).digest('hex').slice(0, 6)}`;
+  return {
+    id,
+    key,
+    title: f.title,
+    criterion: f.criterion,
+    standard: f.standard || 'WCAG',
+    criterionName: f.criterionName || '',
+    impact: f.impact,
+    effort: f.effort,
+    priority: MATRIX[f.impact]?.[f.effort] ?? 4,
+    source: f.source,
+    confidence: f.confidence || 'confirmed',
+    location,
+    occurrences: f.occurrences || 1,
+    shared: !!f.shared,
+    external: !!f.external,
+    evidence: f.evidence || '',
+    affects: f.affects || '',
+    fix: f.fix || '',
+    verify: f.verify || '',
+    en: f.standard === 'EN' ? f.criterion : `9.${f.criterion}`,
+    evidenceShots: (f.shots || []).map((ref) => resolveShot(ref, where)).filter(Boolean),
+  };
+});
+
+const seen = new Map();
+for (const f of findings) {
+  if (seen.has(f.id)) problems.push(`duplicate id ${f.id} ("${seen.get(f.id)}" and "${f.title}"): merge them or give them different keys`);
+  seen.set(f.id, f.title);
+}
+if (problems.length) fail(`fix findings.input.json:\n  - ${problems.join('\n  - ')}`);
+
+// ---------- Compare with previous runs ----------
+const reportsDir = dirname(runDir);
+const previousRuns = readdirSync(reportsDir, { withFileTypes: true })
+  .filter((d) => d.isDirectory() && d.name < basename(runDir) && existsSync(join(reportsDir, d.name, 'findings.json')))
+  .map((d) => d.name)
+  .sort()
+  .map((name) => ({ name, data: JSON.parse(readFileSync(join(reportsDir, name, 'findings.json'), 'utf8')) }));
+
+const prev = previousRuns.at(-1);
+const prevIds = new Set((prev?.data.findings || []).map((f) => f.id));
+const olderIds = new Set(previousRuns.slice(0, -1).flatMap((r) => (r.data.findings || []).map((f) => f.id)));
+
+for (const f of findings) {
+  if (!prev) f.status = 'new';
+  else if (prevIds.has(f.id)) f.status = 'persisting';
+  else if (olderIds.has(f.id)) f.status = 'regressed';
+  else f.status = 'new';
+}
+
+// A previous finding counts as fixed only if this run looked at it again: same layer ran, and
+// the file and criterion are inside this run's scope. Otherwise it is carried as "not re-checked".
+const meta = input.meta || {};
+const layersRan = new Set((meta.layers || []).filter((l) => l.ran).map((l) => l.id));
+const scopePaths = meta.scopePaths || [];
+const criteriaScope = meta.criteria || null;
+const inScope = (f) =>
+  layersRan.has(f.source) &&
+  (!scopePaths.length || scopePaths.some((p) => f.location.file.startsWith(p))) &&
+  (!criteriaScope || criteriaScope.includes(f.criterion));
+const currentIds = new Set(findings.map((f) => f.id));
+const fixed = [];
+const notRechecked = [];
+for (const f of prev?.data.findings || []) {
+  if (currentIds.has(f.id)) continue;
+  (inScope(f) ? fixed : notRechecked).push({ id: f.id, title: f.title, criterion: f.criterion });
+}
+
+// ---------- Write outputs ----------
+const output = {
+  meta: {
+    project: meta.project || 'BigBlueButton',
+    date: new Date().toISOString(),
+    branch: git('rev-parse --abbrev-ref HEAD'),
+    commit: git('rev-parse --short HEAD'),
+    dirty: git('status --porcelain') !== '',
+    scope: meta.scope || '',
+    scopePaths,
+    criteria: criteriaScope,
+    mode: meta.mode || 'full',
+    layers: meta.layers || [],
+    previousRun: prev?.data.meta?.date || null,
+    previousRunDir: prev?.name || null,
+    example: !!meta.example,
+  },
+  notes: {
+    summary: meta.summary || '',
+    reviewedFlows: meta.reviewedFlows || [],
+    notCovered: meta.notCovered || [],
+  },
+  scenarios: scenarios.map((s) => ({
+    id: s.id,
+    name: s.name,
+    description: s.description,
+    actors: s.actors || [],
+    announcements: s.announcements || [],
+    checks: Object.entries(s.checks || {}).map(([id, v]) => {
+      const error = (v && typeof v === 'object' && v.error) || (id.endsWith('Error') ? String(v) : '');
+      return { id, ok: !error, error: error ? String(error).slice(0, 300) : '' };
+    }),
+    states: (s.states || []).map((st) => ({
+      key: `${s.id}/${st.id}`,
+      id: st.id,
+      name: st.name,
+      description: st.description,
+      actor: st.actor,
+      ok: st.ok,
+      error: st.error || '',
+      violations: (st.violations || []).length,
+      incomplete: (st.incomplete || []).length,
+      viewport: st.viewport || null,
+      lang: st.lang || '',
+    })),
+  })),
+  findings: findings.sort((a, b) => a.priority - b.priority || IMPACTS.indexOf(a.impact) - IMPACTS.indexOf(b.impact)),
+  coverage: input.coverage || {},
+  fixed,
+  notRechecked,
+  discarded: input.discarded || [],
+  manualChecks: input.manualChecks || [],
+};
+
+writeFileSync(join(runDir, 'findings.json'), `${JSON.stringify(output, null, 2)}\n`);
+
+const template = readFileSync(TEMPLATE, 'utf8');
+const safeJson = JSON.stringify({ ...output, shots }).replace(/</g, '\\u003c');
+writeFileSync(join(runDir, 'report.html'), template.replace('__DATA__', () => safeJson));
+
+// ---------- Summary for the agent ----------
+const count = (fn) => output.findings.filter(fn).length;
+for (const w of warnings) console.warn(`warning: ${w}`);
+console.log(
+  [
+    `report: ${join(runDir, 'report.html')}`,
+    `findings: ${output.findings.length} (P1 ${count((f) => f.priority === 1)}, P2 ${count((f) => f.priority === 2)}, P3 ${count((f) => f.priority === 3)}, P4 ${count((f) => f.priority === 4)})`,
+    `runtime: ${scenarios.length} scenarios, ${stateIndex.size} states, ${Object.keys(shots).length} screenshots embedded`,
+    prev
+      ? `vs ${prev.name}: ${count((f) => f.status === 'new')} new, ${count((f) => f.status === 'regressed')} regressed, ${fixed.length} fixed, ${notRechecked.length} not re-checked`
+      : 'first run: nothing to compare with',
+  ].join('\n'),
+);
