@@ -3,7 +3,9 @@
  * Pattern scan for accessibility anti-patterns. Prints CANDIDATES as JSON: every hit must be
  * triaged by reading the code (see references/static-patterns.md) before it becomes a finding.
  *
- *   node static-scan.mjs <path> [<path> ...] > raw/static.json
+ *   node static-scan.mjs [--guidelines=2.1,2.4] <path> [<path> ...] > raw/static.json
+ *
+ * --guidelines limits the scan to patterns of those guidelines (or principles "2", or criteria "2.4.7").
  *
  * No dependencies. Skips node_modules, tests, build output and locale files.
  */
@@ -52,6 +54,7 @@ const PATTERNS = [
   {
     id: 'static-element-click',
     criterion: '4.1.2',
+    also: ['2.1.1'],
     kinds: ['code'],
     re: /<(?:div|span|li|p|img|section|svg|td|tr)\b(?=[^>]*\bonClick\s*=)(?![^>]*\brole\s*=)[^>]*>/g,
     hint: 'Clickable non-interactive element without role. Check keyboard support (2.1.1) and name/role (4.1.2). Arrow functions can cut the match short: read the real tag.',
@@ -66,6 +69,7 @@ const PATTERNS = [
   {
     id: 'placeholder-as-label',
     criterion: '3.3.2',
+    also: ['1.3.1', '4.1.2'],
     kinds: ['code', 'markup'],
     re: /<(?:input|textarea)\b(?=[^>]*\bplaceholder\s*=)(?![^>]*\b(?:aria-label|aria-labelledby|id)\s*=)[^>]*>/g,
     hint: 'Field with placeholder and no aria-label, aria-labelledby or id (so no <label for>). Placeholder alone is not a label.',
@@ -133,7 +137,15 @@ function* walk(path) {
   }
 }
 
-const roots = process.argv.slice(2);
+const args = process.argv.slice(2);
+const topicArg = args.find((a) => a.startsWith('--guidelines='));
+const TOPIC = topicArg ? topicArg.slice('--guidelines='.length).split(',').map((s) => s.trim()).filter(Boolean) : [];
+const wants = (c) => !TOPIC.length || TOPIC.some((s) => c === s || c.startsWith(`${s}.`) || s.startsWith(`${c}.`));
+// EN 9.7 (user preferences) patterns belong with the visual-presentation topic 1.4.
+const ACTIVE = PATTERNS.filter((p) =>
+  [p.standard === 'EN' ? '1.4.4' : p.criterion, ...(p.also || [])].some((c) => wants(c)),
+);
+const roots = args.filter((a) => !a.startsWith('--'));
 if (!roots.length) {
   console.error('usage: node static-scan.mjs <path> [<path> ...]');
   process.exit(1);
@@ -148,7 +160,7 @@ for (const root of roots) {
     if (!kind) continue;
     files++;
     const text = readFileSync(file, 'utf8');
-    for (const p of PATTERNS) {
+    for (const p of ACTIVE) {
       if (!p.kinds.includes(kind)) continue;
       p.re.lastIndex = 0;
       for (let m = p.re.exec(text); m; m = p.re.exec(text)) {
@@ -171,7 +183,7 @@ const byPattern = {};
 for (const h of hits) byPattern[h.pattern] = (byPattern[h.pattern] || 0) + 1;
 console.log(
   JSON.stringify(
-    { scannedFiles: files, roots, patterns: PATTERNS.map(({ re, kinds, ...rest }) => rest), counts: byPattern, hits },
+    { scannedFiles: files, roots, topic: TOPIC, patterns: ACTIVE.map(({ re, kinds, ...rest }) => rest), counts: byPattern, hits },
     null,
     2,
   ),

@@ -17,27 +17,31 @@ Skill directory: the folder that contains this SKILL.md (below: `$SKILL`; in thi
 
 ## 1. Scope and mode
 
-Read the arguments:
+The normal way to work is **one topic at a time**: pick a guideline, audit everything in it, fix what was found, audit it again until it is done, then move to the next one. A full audit is the occasional overview used to choose the next topic.
 
 | Invocation | Mode | Scope |
 | --- | --- | --- |
-| `/a11y-audit` or `full` | `full` | `bigbluebutton-html5/imports/ui` and `bigbluebutton-html5/client` |
-| `/a11y-audit <path>` | `path` | that folder or file |
-| `/a11y-audit diretriz 1.4` (or `guideline`; several allowed, or `principio 2` for all guidelines of a principle) | `guideline` | whole client, every criterion of the given guidelines, decided completely; others are `skip`. This is the mode for closing one work phase. |
-| `/a11y-audit criterio 2.4.7` (or `criterion`) | `criterion` | whole client, only the given criteria; others are `skip` |
+| `/a11y-audit diretriz 2.1` (or `guideline`; several: `diretriz 2.1 2.4`; a whole principle: `principio 2`) | `guideline` | every criterion of the topic, across the whole client and every flow, decided completely. Everything else is left out of the run and of the report. |
+| `/a11y-audit criterio 2.4.7` (or `criterion`) | `criterion` | one or more criteria, same depth |
+| `/a11y-audit` or `full` | `full` | all 55 criteria (overview / map) |
+| `/a11y-audit <path>` | `path` | that folder or file, all criteria |
 | `/a11y-audit diff [base]` | `diff` | files changed vs `git merge-base HEAD <base>` (default base: the repo main branch, `v4.0.x-develop`) under `bigbluebutton-html5/` |
 | add `--no-runtime` | | skip the runtime layer |
 
 If the request is ambiguous, pick the closest mode and say which one you used. Do not ask.
 
-Create the run directory at the repo root: `a11y-reports/<YYYY-MM-DD_HHMM>/raw/`. The name must sort chronologically: the report compares against older sibling directories. `a11y-reports/` is git-ignored.
+Create the run directory at the repo root: `a11y-reports/<YYYY-MM-DD_HHMM>[_<topic>]/raw/`, e.g. `2026-11-20_1430_d2.1` or `2026-11-20_1500_full`. It must start with the date and time: the report compares against older runs **of the same topic** (or, the first time, against the latest full run restricted to the topic). `a11y-reports/` is git-ignored.
+
+In `guideline` and `criterion` modes set `meta.guidelines` / `meta.criteria` in findings.input.json, and in every layer look only at what can inform the topic (each step below says how). Criteria outside the topic are left out automatically.
 
 ## 2. Static layer
 
 ```bash
-node $SKILL/scripts/static-scan.mjs <scope paths…> > <run>/raw/static.json
+node $SKILL/scripts/static-scan.mjs [--guidelines=2.1] <scope paths…> > <run>/raw/static.json
 $SKILL/scripts/eslint-a11y.sh <run>/raw/eslint.json <scope paths…>
 ```
+
+With a topic, pass `--guidelines` to the scan (it keeps only the topic's patterns) and triage only the eslint messages whose rule maps to the topic (`references/static-patterns.md`).
 
 Then triage every candidate as described in `references/static-patterns.md`: open the code, decide, group by root cause. Rejected candidates go to `discarded` with a reason. If a previous run exists, read its `findings.json` `discarded` list and reuse decisions for unchanged code instead of re-reading it.
 
@@ -45,7 +49,7 @@ Then triage every candidate as described in `references/static-patterns.md`: ope
 
 Check whether it can run (`bigbluebutton-tests/playwright/.env` has non-empty `BBB_URL` and `BBB_SECRET`, `node_modules` exists, a Chromium is installed). If anything is missing, skip the layer, record `"ran": false` with a short `reason`, and tell the user in the final message exactly what to set up (see `references/bbb-map.md`). Do not try to install a BigBlueButton server.
 
-When it can run, follow "Running the runtime layer" in `references/bbb-map.md` with `A11Y_AUDIT_DIR=<abs run dir>/raw/runtime` (about 6 minutes; allow 20). It runs six scenarios (moderator tour, moderator + attendee interactions, guest lobby, pt-BR, dark theme, mobile) and writes one JSON per scenario plus a screenshot of every state. Then:
+When it can run, follow "Running the runtime layer" in `references/bbb-map.md` with `A11Y_AUDIT_DIR=<abs run dir>/raw/runtime`, plus `A11Y_GUIDELINES=<topic>` in topic modes (e.g. `2.1`): the spec then skips the checks and scenarios that cannot inform the topic and runs axe only with the topic's rules. Full run: about 8 minutes; a topic is usually faster. Allow 25 minutes. It runs six scenarios (moderator tour, moderator + attendee interactions, guest lobby, pt-BR, dark theme, mobile) and writes one JSON per scenario plus a screenshot of every state. Then:
 
 - Map each axe violation to its criterion via the `wcag…` tag. Group by rule and root cause across states and scenarios (the same rule in many states is usually one finding). Trace selectors to source files.
 - Treat `incomplete` and the custom checks (`keyboard.noOutlineOrShadow`, `keyboard.obscured`, `reflow.offenders`, `textSpacing.newlyClipped`, `nonTextContrast`) as candidates: confirm before reporting. Rejected ones go to `discarded`.

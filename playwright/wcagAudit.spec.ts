@@ -18,6 +18,7 @@ import {
   checkTextSpacing,
   clearAnnouncements,
   installAnnouncementRecorder,
+  wants,
 } from './wcagAuditRecorder';
 
 /**
@@ -62,10 +63,10 @@ async function sendChatMessage(p: Page, text: string) {
 }
 
 async function standardChecks(rec: AuditRecorder, page: PlaywrightPage, prefix = '') {
-  await rec.check(`${prefix}keyboard`, () => checkKeyboard(page));
-  await rec.check(`${prefix}reflow`, () => checkReflow(page));
-  await rec.check(`${prefix}textSpacing`, () => checkTextSpacing(page));
-  await rec.check(`${prefix}nonTextContrast`, () => findNonTextContrastViolations(page));
+  await rec.check(`${prefix}keyboard`, () => checkKeyboard(page), ['2.1', '2.4']);
+  await rec.check(`${prefix}reflow`, () => checkReflow(page), ['1.4']);
+  await rec.check(`${prefix}textSpacing`, () => checkTextSpacing(page), ['1.4']);
+  await rec.check(`${prefix}nonTextContrast`, () => findNonTextContrastViolations(page), ['1.4']);
 }
 
 test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
@@ -115,31 +116,38 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
         },
       );
       await standardChecks(rec, p);
-      await rec.check('focusReturn', async () => {
-        const results = [];
-        for (const trigger of [
-          e.audioDropdownMenu,
-          e.mediaAreaButton,
-          e.optionsButton,
-          e.leaveMeetingDropdown,
-          e.settingsSidebarButton,
-        ]) {
-          results.push(await checkFocusReturn(p, trigger));
-        }
-        return results;
-      });
-      await rec.check('hoverFocus', () =>
-        checkHoverFocus(p, [
-          e.joinVideo,
-          e.unmuteMicButton,
-          e.raiseHandBtn,
-          e.reactionsButton,
-          e.mediaAreaButton,
-          e.leaveMeetingDropdown,
-          e.connectionStatusBtn,
-          e.settingsSidebarButton,
-          e.usersListSidebarButton,
-        ]),
+      await rec.check(
+        'focusReturn',
+        async () => {
+          const results = [];
+          for (const trigger of [
+            e.audioDropdownMenu,
+            e.mediaAreaButton,
+            e.optionsButton,
+            e.leaveMeetingDropdown,
+            e.settingsSidebarButton,
+          ]) {
+            results.push(await checkFocusReturn(p, trigger));
+          }
+          return results;
+        },
+        ['2.4', '2.1', '3.2'],
+      );
+      await rec.check(
+        'hoverFocus',
+        () =>
+          checkHoverFocus(p, [
+            e.joinVideo,
+            e.unmuteMicButton,
+            e.raiseHandBtn,
+            e.reactionsButton,
+            e.mediaAreaButton,
+            e.leaveMeetingDropdown,
+            e.connectionStatusBtn,
+            e.settingsSidebarButton,
+            e.usersListSidebarButton,
+          ]),
+        ['1.4'],
       );
       await rec.state(p, 'audio-menu', 'Menu de áudio', 'Menu de dispositivos e saída do áudio.', {
         enter: () => mod.waitAndClick(e.audioDropdownMenu),
@@ -148,7 +156,7 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
       await rec.state(p, 'user-list', 'Lista de usuários', 'Painel de participantes.', {
         enter: () => openUserListIfClosed(mod),
       });
-      await rec.check('keyboard-user-list', () => checkKeyboard(p, 60));
+      await rec.check('keyboard-user-list', () => checkKeyboard(p, 60), ['2.1', '2.4']);
       await rec.state(
         p,
         'user-item-menu',
@@ -172,7 +180,7 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
           await sendChatMessage(mod, 'Mensagem de teste da auditoria');
         },
       });
-      await rec.check('keyboard-public-chat', () => checkKeyboard(p, 60));
+      await rec.check('keyboard-public-chat', () => checkKeyboard(p, 60), ['2.1', '2.4']);
       await rec.state(p, 'chat-options', 'Opções do chat', 'Menu de opções do chat (salvar, copiar, limpar).', {
         enter: () => mod.waitAndClick(e.chatOptions),
         leave: () => esc(p),
@@ -181,7 +189,7 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
         enter: () => mod.waitAndClick(e.settingsSidebarButton),
       });
       // Inside an open modal: focus must stay in the dialog (and not escape to the page behind it).
-      await rec.check('keyboard-settings-modal', () => checkKeyboard(p, 40));
+      await rec.check('keyboard-settings-modal', () => checkKeyboard(p, 40), ['2.1', '2.4']);
       await rec.state(p, 'settings-shortcuts', 'Atalhos de teclado', 'Aba de atalhos dentro das configurações.', {
         enter: () => mod.waitAndClick(e.shortcutsTab),
         leave: () => mod.waitAndClick(e.saveSettingsButton),
@@ -498,8 +506,8 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
           enter: () => guest.hasElement(e.guestMessage, 'guest should wait'),
         },
       );
-      await rec.check('guest-lobby-keyboard', () => checkKeyboard(guest.page, 30));
-      await rec.check('guest-lobby-reflow', () => checkReflow(guest.page));
+      await rec.check('guest-lobby-keyboard', () => checkKeyboard(guest.page, 30), ['2.1', '2.4']);
+      await rec.check('guest-lobby-reflow', () => checkReflow(guest.page), ['1.4']);
       await mod.page.waitForTimeout(1500);
       await rec.collectAnnouncements(mod.page, 'moderador: convidado aguardando aprovação');
 
@@ -559,6 +567,7 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
   });
 
   test('variant: Brazilian Portuguese locale', async ({ browser, page }, testInfo) => {
+    test.skip(!wants('1.4', '3.1', '2.5'), 'not relevant to the selected topic');
     test.setTimeout(TIMEOUT);
     const rec = new AuditRecorder(
       {
@@ -574,8 +583,8 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
       const mod = new Page(browser, page, testInfo);
       await mod.init(true, { testInfo, joinParameter: 'userdata-bbb_override_default_locale=pt-BR' });
       await rec.state(page, 'meeting', 'Sala em pt-BR', 'Estado principal com o cliente em português.');
-      await rec.check('textSpacing', () => checkTextSpacing(page));
-      await rec.check('reflow', () => checkReflow(page));
+      await rec.check('textSpacing', () => checkTextSpacing(page), ['1.4']);
+      await rec.check('reflow', () => checkReflow(page), ['1.4']);
       await rec.state(page, 'public-chat', 'Chat em pt-BR', 'Chat público em português.', {
         enter: () => openPublicChatPanel(mod),
       });
@@ -595,6 +604,7 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
   });
 
   test('variant: dark theme', async ({ browser, page }, testInfo) => {
+    test.skip(!wants('1.4'), 'not relevant to the selected topic');
     test.setTimeout(TIMEOUT);
     const rec = new AuditRecorder(
       {
@@ -622,7 +632,7 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
         rec.note('darkModeError', String(err).slice(0, 300));
       }
       await rec.state(page, 'meeting', 'Sala no tema escuro', 'Estado principal com o tema escuro.');
-      await rec.check('nonTextContrast', () => findNonTextContrastViolations(page));
+      await rec.check('nonTextContrast', () => findNonTextContrastViolations(page), ['1.4']);
       await rec.state(page, 'public-chat', 'Chat no tema escuro', 'Chat público no tema escuro.', {
         enter: () => openPublicChatPanel(mod),
       });
@@ -647,6 +657,7 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
   });
 
   test('variant: mobile phone', async ({ browser }, testInfo) => {
+    test.skip(!wants('1.1', '1.3', '1.4', '2.5', '4.1'), 'not relevant to the selected topic');
     test.setTimeout(TIMEOUT);
     const rec = new AuditRecorder(
       {

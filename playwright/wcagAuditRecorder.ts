@@ -12,7 +12,32 @@ import { join } from 'path';
  * A11Y_AUDIT_DIR (one JSON per scenario plus shots/).
  */
 
-const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'];
+const LEVEL_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'];
+const CRITERIA = (
+  '1.1.1 1.2.1 1.2.2 1.2.3 1.2.4 1.2.5 1.3.1 1.3.2 1.3.3 1.3.4 1.3.5 1.4.1 1.4.2 1.4.3 1.4.4 1.4.5 1.4.10 1.4.11 1.4.12 1.4.13 ' +
+  '2.1.1 2.1.2 2.1.4 2.2.1 2.2.2 2.3.1 2.4.1 2.4.2 2.4.3 2.4.4 2.4.5 2.4.6 2.4.7 2.4.11 2.5.1 2.5.2 2.5.3 2.5.4 2.5.7 2.5.8 ' +
+  '3.1.1 3.1.2 3.2.1 3.2.2 3.2.3 3.2.4 3.2.6 3.3.1 3.3.2 3.3.3 3.3.4 3.3.7 3.3.8 4.1.2 4.1.3'
+).split(' ');
+
+/**
+ * Topic scope: A11Y_GUIDELINES="2.1" (or "2.1,2.4", a principle "2", or a criterion "2.4.7").
+ * Empty means everything. Checks and scenarios that cannot inform the topic are skipped.
+ */
+export const GUIDELINES = (process.env.A11Y_GUIDELINES || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+/** True when no topic is set, or one of `topics` (guidelines or criteria) overlaps the topic. */
+export function wants(...topics: string[]) {
+  if (!GUIDELINES.length) return true;
+  return topics.some((g) => GUIDELINES.some((s) => g === s || g.startsWith(`${s}.`) || s.startsWith(`${g}.`)));
+}
+
+// With a topic, axe runs only the rules tagged with the topic's criteria (wcag143 = 1.4.3).
+const WCAG_TAGS = GUIDELINES.length
+  ? CRITERIA.filter((c) => wants(c)).map((c) => `wcag${c.replace(/\./g, '')}`)
+  : LEVEL_TAGS;
 const MAX_NODES = 20;
 export const SETTLE_MS = 800;
 
@@ -247,7 +272,12 @@ export class AuditRecorder {
     return record.ok;
   }
 
-  async check(id: string, fn: () => Promise<unknown>) {
+  /** Runs a check; with a topic set, checks whose `topics` do not overlap it are recorded as skipped. */
+  async check(id: string, fn: () => Promise<unknown>, topics: string[] = []) {
+    if (topics.length && !wants(...topics)) {
+      this.checks[id] = { skipped: `fora do tópico (${GUIDELINES.join(', ')})` };
+      return;
+    }
     try {
       this.checks[id] = await fn();
     } catch (err) {
@@ -290,6 +320,7 @@ export class AuditRecorder {
       ...this.scenario,
       generatedAt: new Date().toISOString(),
       axeTags: WCAG_TAGS,
+      topic: GUIDELINES,
       states: this.states,
       checks: this.checks,
       announcements: this.announcements,

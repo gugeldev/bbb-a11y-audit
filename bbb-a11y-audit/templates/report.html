@@ -349,7 +349,7 @@ details.ann > summary:hover { background: var(--soft-2); }
       <div class="verdict-row">
         <div class="verdict-main">
           <div>
-            <p class="verdict-label">Conformidade WCAG 2.2 AA</p>
+            <p class="verdict-label" id="verdict-label">Conformidade WCAG 2.2 AA</p>
             <p class="verdict" id="verdict"></p>
             <p class="verdict-sub" id="verdict-sub"></p>
           </div>
@@ -442,6 +442,8 @@ __DATA__
   var COV = { fail: ['Falha', 't-red'], human: ['Precisa de pessoa', 't-amber'], 'not-covered': ['Não coberto', 't-orange'], pass: ['Passou', 't-green'], na: ['Não se aplica', 't-gray'], skip: ['Fora do escopo', 't-gray'] };
   var COV_DOT = { fail: 'var(--red-dot)', human: 'var(--amber-dot)', 'not-covered': 'var(--orange-dot)', pass: 'var(--green-dot)', na: 'var(--gray-dot)', skip: 'var(--soft-2)' };
   var METHOD = { tool: 'Ferramenta', agent: 'Agente', human: 'Pessoa' };
+  var TOPIC = (D.meta.guidelines && D.meta.guidelines.length) ? D.meta.guidelines : ((D.meta.criteria && D.meta.criteria.length) ? D.meta.criteria : null);
+  function glInScope(g) { return !TOPIC || TOPIC.some(function (s) { return g === s || g.indexOf(s + '.') === 0 || s.indexOf(g + '.') === 0; }); }
   var GUIDE = {
     '1.1': 'Alternativas em texto', '1.2': 'Mídia baseada em tempo', '1.3': 'Adaptável', '1.4': 'Distinguível',
     '2.1': 'Acessível por teclado', '2.2': 'Tempo suficiente', '2.3': 'Convulsões e reações físicas', '2.4': 'Navegável', '2.5': 'Modalidades de entrada',
@@ -498,7 +500,7 @@ __DATA__
     : covCount.human ? 'Sem falhas, aguardando teste humano'
     : covCount.skip ? 'Sem falhas no escopo' : 'Conforme';
   var subBits = [];
-  if (covCount.fail) subBits.push(covCount.fail + ' de ' + (CRITERIA.length - covCount.skip) + ' critérios falham, com ' + F.length + ' achados');
+  if (covCount.fail) subBits.push(covCount.fail + ' de ' + (CRITERIA.length - covCount.skip) + ' critérios falham, com ' + F.length + (F.length === 1 ? ' achado' : ' achados'));
   if (covCount['not-covered']) subBits.push(covCount['not-covered'] + ' ainda não cobertos');
   if (covCount.human) subBits.push(covCount.human + ' dependem de uma pessoa');
   $('verdict-sub').textContent = subBits.length ? subBits.join(', ') + '.' : 'Todos os critérios do escopo passaram ou não se aplicam.';
@@ -512,7 +514,7 @@ __DATA__
   var covOrder = ['fail', 'human', 'not-covered', 'pass', 'na', 'skip'];
   $('bar').innerHTML = covOrder.filter(function (k) { return k !== 'skip'; }).map(function (k) { return covCount[k] ? '<i style="flex:' + covCount[k] + ';background:' + COV_DOT[k] + '"></i>' : ''; }).join('');
   var covLabel = { fail: 'falham', human: 'precisam de pessoa', 'not-covered': 'não cobertos', pass: 'passaram', na: 'não se aplicam', skip: 'fora do escopo' };
-  $('legend').innerHTML = covOrder.filter(function (k) { return covCount[k] || k === 'fail' || k === 'pass'; }).map(function (k) { return '<span><i class="sq" style="background:' + COV_DOT[k] + '" aria-hidden="true"></i><b>' + covCount[k] + '</b> ' + covLabel[k] + '</span>'; }).join('');
+  $('legend').innerHTML = covOrder.filter(function (k) { return (covCount[k] || k === 'fail' || k === 'pass') && !(k === 'skip' && TOPIC); }).map(function (k) { return '<span><i class="sq" style="background:' + COV_DOT[k] + '" aria-hidden="true"></i><b>' + covCount[k] + '</b> ' + covLabel[k] + '</span>'; }).join('');
   var counts = { 1: 0, 2: 0, 3: 0, 4: 0 };
   F.forEach(function (f) { counts[f.priority]++; });
   $('stats').innerHTML = [1, 2, 3, 4].map(function (p) {
@@ -520,7 +522,7 @@ __DATA__
   }).join('');
 
   // Abas
-  var TABS = [['diretrizes', 'Por diretriz', Object.keys(GUIDE).length], ['achados', 'Por prioridade', F.length], ['cobertura', 'O que foi testado', (D.scenarios || []).length + ' cenários'], ['leitor', 'Teste humano', D.manualChecks.length], ['corrigidos', 'Corrigidos', D.fixed.length]];
+  var TABS = [['diretrizes', 'Por diretriz', Object.keys(GUIDE).filter(glInScope).length], ['achados', 'Por prioridade', F.length], ['cobertura', 'O que foi testado', (D.scenarios || []).length + ' cenários'], ['leitor', 'Teste humano', D.manualChecks.length], ['corrigidos', 'Corrigidos', D.fixed.length]];
   $('tabs').innerHTML = TABS.map(function (t, i) {
     return '<button role="tab" id="tab-' + t[0] + '" aria-controls="panel-' + t[0] + '" aria-selected="' + (i === 0) + '" tabindex="' + (i ? -1 : 0) + '">' + t[1] + '<span class="n">' + t[2] + '</span></button>';
   }).join('');
@@ -698,8 +700,10 @@ __DATA__
     if (n.human) return ['Aguardando pessoa', 't-amber', n];
     return ['Concluída', 't-green', n];
   }
-  $('guidelines').innerHTML = Object.keys(PRINCIPLES).map(function (k) {
-    var gls = Object.keys(GUIDE).filter(function (g) { return g.split('.')[0] === k; });
+  $('guidelines').innerHTML = Object.keys(PRINCIPLES).filter(function (k) {
+    return Object.keys(GUIDE).some(function (g) { return g.split('.')[0] === k && glInScope(g); });
+  }).map(function (k) {
+    var gls = Object.keys(GUIDE).filter(function (g) { return g.split('.')[0] === k && glInScope(g); });
     var stats = gls.map(function (g) { return guidelineStatus(CRITERIA.filter(function (c) { return c[0].indexOf(g + '.') === 0; }))[0]; });
     var inScopeN = stats.filter(function (s) { return s !== 'Fora do escopo'; }).length;
     var done = stats.filter(function (s) { return s === 'Concluída'; }).length;
@@ -761,7 +765,14 @@ __DATA__
   }).join('');
 
   $('foot-l').textContent = 'Camadas: ' + (D.meta.layers || []).map(function (l) { return l.name + (l.ran ? '' : ' (não executada' + (l.reason ? ': ' + l.reason : '') + ')'); }).join(' · ');
-  $('foot-r').textContent = prev ? 'Comparado com ' + prev : 'Gerado por /a11y-audit';
+  $('foot-r').textContent = prev
+    ? 'Comparado com ' + (TOPIC && D.meta.previousRunScope === 'full' ? 'a auditoria completa de ' : (TOPIC ? 'a última auditoria deste tópico, de ' : '')) + prev
+    : 'Gerado por /a11y-audit';
+  if (TOPIC) {
+    var topicName = TOPIC.map(function (s) { return s + (GUIDE[s] ? ' ' + GUIDE[s] : (PRINCIPLES[s] ? ' ' + PRINCIPLES[s][0] : (CRIT[s] ? ' ' + CRIT[s].name : ''))); }).join(', ');
+    $('verdict-label').textContent = 'Tópico: ' + topicName;
+    document.title = 'Auditoria WCAG · ' + TOPIC.join(', ');
+  }
   renderFindings();
   selectTab('diretrizes');
 })();

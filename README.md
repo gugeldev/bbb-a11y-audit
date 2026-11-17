@@ -19,6 +19,14 @@ Each finding comes with the criterion, evidence, a screenshot with the problem m
 
 ## Use
 
-Ask your agent to run the `a11y-audit` skill, for the whole client, one guideline (e.g. `diretriz 1.4`), a single criterion, a folder, or just the branch diff.
+Work one topic at a time: pick a guideline, audit everything in it, fix what was found, run it again until it is done, then move on.
 
-The report is organized by principle and guideline, so each guideline can be a work phase. Every criterion ends up failing, passing, not applicable, or, only where a person is truly needed, waiting for a human check with a ready-made script. The report also records whether each criterion was checked by a tool, by the agent, or by a person. Reports go to `a11y-reports/<date>_<time>/report.html`, and each run is compared with the previous one.
+```text
+diretriz 2.1      # one guideline (or several, or "principio 2")
+criterio 2.4.7    # one criterion
+full              # all 55 criteria, as an overview to choose the next topic
+```
+
+A topic run only checks and reports that topic, and it compares against the last run of the same topic, so you can see what was fixed. Every criterion ends up failing, passing, not applicable, or, only where a person is truly needed, waiting for a human check with a ready-made script. The report also says whether each criterion was checked by a tool, by the agent, or by a person.
+
+Reports go to `a11y-reports/<date>_<time>_<topic>/report.html`.

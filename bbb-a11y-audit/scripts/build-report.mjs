@@ -203,9 +203,21 @@ const previousRuns = readdirSync(reportsDir, { withFileTypes: true })
   .sort()
   .map((name) => ({ name, data: JSON.parse(readFileSync(join(reportsDir, name, 'findings.json'), 'utf8')) }));
 
-const prev = previousRuns.at(-1);
-const prevIds = new Set((prev?.data.findings || []).map((f) => f.id));
-const olderIds = new Set(previousRuns.slice(0, -1).flatMap((r) => (r.data.findings || []).map((f) => f.id)));
+// Compare with the latest run of the same topic; a topic run with no history compares with the
+// latest full run, restricted to the topic. Runs from older skill versions have no topic: "full".
+const scopeKey = (m) => {
+  if (m?.guidelines?.length) return `g:${[...m.guidelines].sort().join(',')}`;
+  if (m?.criteria?.length) return `c:${[...m.criteria].sort().join(',')}`;
+  return 'full';
+};
+const myScope = scopeKey(input.meta);
+const sameScope = previousRuns.filter((r) => scopeKey(r.data.meta) === myScope);
+const history = sameScope.length ? sameScope : previousRuns.filter((r) => scopeKey(r.data.meta) === 'full');
+const inTopic = (f) => (f.standard === 'EN' ? inCriteriaScope('1.4.4') : inCriteriaScope(f.criterion));
+const prev = history.at(-1);
+const prevFindings = (prev?.data.findings || []).filter(inTopic);
+const prevIds = new Set(prevFindings.map((f) => f.id));
+const olderIds = new Set(history.slice(0, -1).flatMap((r) => (r.data.findings || []).filter(inTopic).map((f) => f.id)));
 
 for (const f of findings) {
   if (!prev) f.status = 'new';
@@ -227,7 +239,7 @@ const inScope = (f) =>
 const currentIds = new Set(findings.map((f) => f.id));
 const fixed = [];
 const notRechecked = [];
-for (const f of prev?.data.findings || []) {
+for (const f of prevFindings) {
   if (currentIds.has(f.id)) continue;
   (inScope(f) ? fixed : notRechecked).push({ id: f.id, title: f.title, criterion: f.criterion });
 }
@@ -248,6 +260,7 @@ const output = {
     layers: meta.layers || [],
     previousRun: prev?.data.meta?.date || null,
     previousRunDir: prev?.name || null,
+    previousRunScope: prev ? scopeKey(prev.data.meta) : null,
     example: !!meta.example,
   },
   notes: {

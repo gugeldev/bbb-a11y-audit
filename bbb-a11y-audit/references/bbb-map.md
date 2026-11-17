@@ -66,6 +66,20 @@ cd bigbluebutton-tests/playwright
 A11Y_AUDIT_DIR=<abs run dir>/raw/runtime npx playwright test accessibility/wcagAudit.spec.ts --project=chromium --workers=1
 ```
 
+With `A11Y_GUIDELINES` set (a guideline, several, a principle or a criterion), axe runs only the rules tagged with the topic's criteria, and checks and scenarios that cannot inform the topic are recorded as skipped:
+
+| Topic | Custom checks that run | Scenarios skipped |
+| --- | --- | --- |
+| 1.4 | reflow, textSpacing, nonTextContrast, hoverFocus | none |
+| 2.1, 2.4 | keyboard walks, focusReturn | dark-theme, locale-pt-br, mobile |
+| 3.2 | focusReturn | dark-theme, locale-pt-br, mobile |
+| 3.1 | none | dark-theme, mobile |
+| 2.5 | none | dark-theme |
+| 1.1, 1.3, 4.1 | none (announcements are always recorded) | dark-theme, locale-pt-br |
+| 1.2, 2.2, 2.3, 3.3 | none | dark-theme, locale-pt-br, mobile |
+
+The moderator, interactions and guest scenarios always run: every topic needs those screens.
+
 The spec does not fail on violations. Each scenario is its own test, so one scenario breaking does not lose the others; a scenario that stops early records `checks.scenarioError`.
 
 | Scenario (`id`) | What it does |
