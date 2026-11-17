@@ -20,6 +20,7 @@ import {
   checkStateChange,
   checkTextSpacing,
   clearAnnouncements,
+  ensureAnnouncementRecorder,
   installAnnouncementRecorder,
   wants,
 } from './wcagAuditRecorder';
@@ -89,6 +90,13 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
       await installAnnouncementRecorder(context);
       const mod = new Page(browser, page, testInfo);
       await mod.init(true, { testInfo, shouldCloseAudioModal: false });
+      // Which server and client build was audited (shown in the report).
+      const clientVersion = await mod.page.evaluate(() => {
+        // @ts-ignore - injected on window by the client at runtime
+        const app = window.meetingClientSettings?.public?.app || {};
+        return { bbbServerVersion: app.bbbServerVersion || null, html5ClientBuild: app.html5ClientBuild || null };
+      });
+      rec.note('server', { url: (process.env.BBB_URL || '').replace(/\/bigbluebutton\/?$/, ''), ...clientVersion });
       const p = mod.page;
 
       await rec.state(
@@ -565,9 +573,36 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
         'Painel do moderador com a sala de grupo rodando.',
         { actor: 'moderator', enter: () => mod.hasElement(e.roomOptions1, 'rooms should be running') },
       );
+      rec.note('recorderAlreadyInstalled', {
+        room: await ensureAnnouncementRecorder(room),
+        moderator: await ensureAnnouncementRecorder(mod.page),
+      });
       await clearAnnouncements(room);
       await clearAnnouncements(mod.page);
+      // Independent evidence: the countdown text itself, before and after the idle period.
+      const remaining = async (pg: PlaywrightPage) =>
+        pg
+          .locator('[data-test="timeRemaining"]')
+          .first()
+          .textContent({ timeout: 2000 })
+          .catch(() => null);
+      const before = { room: await remaining(room), moderator: await remaining(mod.page) };
       await room.waitForTimeout(30000);
+      rec.note('countdownText', {
+        before,
+        after: { room: await remaining(room), moderator: await remaining(mod.page) },
+      });
+      // Which live region (if any) contains the countdown: no region means it is never announced.
+      const liveRegionOf = (pg: PlaywrightPage) =>
+        pg
+          .evaluate(() => {
+            const el = document.querySelector('[data-test="timeRemaining"]');
+            if (!el) return 'countdown not on screen';
+            const region = el.closest('[aria-live]:not([aria-live="off"]),[role="status"],[role="alert"],[role="log"]');
+            return region ? region.outerHTML.slice(0, 200) : 'no live region around the countdown';
+          })
+          .catch((err) => String(err).slice(0, 100));
+      rec.note('countdownLiveRegion', { room: await liveRegionOf(room), moderator: await liveRegionOf(mod.page) });
       await rec.collectAnnouncements(room, 'participante na sala de grupo: 30 s sem interagir');
       await rec.collectAnnouncements(mod.page, 'moderador na sala principal: 30 s sem interagir');
       rec.note('idleSeconds', 30);

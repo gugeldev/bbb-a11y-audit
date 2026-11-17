@@ -96,6 +96,8 @@ interface Announcement {
   region: string;
   regionCreatedWithMessage: boolean;
   none?: boolean;
+  /** The recorder could not read this page: this is NOT silence. */
+  unavailable?: boolean;
 }
 
 type AxeResults = Awaited<ReturnType<AxeBuilder['analyze']>>;
@@ -108,9 +110,13 @@ type AxeRule = AxeResults['violations'][number];
  */
 export function announcementRecorderScript() {
   const w = window as unknown as { a11yAuditLog?: unknown[]; a11yAuditRegionSeen?: WeakMap<Element, number> };
-  if (w.a11yAuditLog) return;
-  w.a11yAuditLog = [];
-  w.a11yAuditRegionSeen = new WeakMap();
+  // Mark the document, not the window: a tab opened by the app keeps its window object when it
+  // navigates from the initial blank page, so a window flag would skip the real document.
+  const doc = document as unknown as { a11yAuditObserved?: boolean };
+  if (doc.a11yAuditObserved) return;
+  doc.a11yAuditObserved = true;
+  if (!Array.isArray(w.a11yAuditLog)) w.a11yAuditLog = [];
+  if (!w.a11yAuditRegionSeen) w.a11yAuditRegionSeen = new WeakMap();
   const SELECTOR = '[aria-live]:not([aria-live="off"]),[role="status"],[role="alert"],[role="log"]';
   const describe = (el: Element) =>
     `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}${el.getAttribute('data-test') ? `[data-test=${el.getAttribute('data-test')}]` : ''}${el.getAttribute('role') ? `[role=${el.getAttribute('role')}]` : ''}`;
@@ -124,7 +130,10 @@ export function announcementRecorderScript() {
           if (n.nodeType !== 1) return;
           const el = n as Element;
           [el, ...Array.from(el.querySelectorAll(SELECTOR))].forEach((r) => {
-            if (r.matches(SELECTOR) && !w.a11yAuditRegionSeen!.has(r)) w.a11yAuditRegionSeen!.set(r, now);
+            if (!r.matches(SELECTOR)) return;
+            if (!w.a11yAuditRegionSeen!.has(r)) w.a11yAuditRegionSeen!.set(r, now);
+            // A region inserted together with its text (React re-mounting it) also carries a message.
+            touched.add(r);
           });
         });
         const target = m.target.nodeType === 1 ? (m.target as Element) : m.target.parentElement;
@@ -142,7 +151,12 @@ export function announcementRecorderScript() {
         if (previous === full) return;
         lastText.set(region, full);
         // Live regions such as the chat log grow over time: keep only what was added.
-        const text = previous && full.startsWith(previous) ? full.slice(previous.length).trim() : full;
+        // Something was removed (a toast closed): nothing new to announce.
+        if (previous && previous.includes(full)) return;
+        // Regions such as the chat log or the toast stack grow: keep only what was added.
+        let text = full;
+        if (previous && full.startsWith(previous)) text = full.slice(previous.length).trim();
+        else if (previous && full.endsWith(previous)) text = full.slice(0, full.length - previous.length).trim();
         if (!text) return;
         const role = region.getAttribute('role') || undefined;
         const politeness = region.getAttribute('aria-live') || (role === 'alert' ? 'assertive' : 'polite');
@@ -161,6 +175,15 @@ export function announcementRecorderScript() {
   };
   if (document.documentElement) start();
   else document.addEventListener('DOMContentLoaded', start);
+}
+
+/** Installs the recorder into a page that is already loaded (e.g. a tab opened by the app). */
+export async function ensureAnnouncementRecorder(page: PlaywrightPage) {
+  const installed = await page
+    .evaluate(() => Boolean((document as unknown as { a11yAuditObserved?: boolean }).a11yAuditObserved))
+    .catch(() => false);
+  if (!installed) await page.evaluate(announcementRecorderScript);
+  return installed;
 }
 
 export async function installAnnouncementRecorder(context: BrowserContext) {
@@ -309,28 +332,31 @@ export class AuditRecorder {
 
   /** Pulls the live-region log recorded on `page` since the last call. */
   async collectAnnouncements(page: PlaywrightPage, actor: string) {
-    const log = await page
+    const base = { t: Date.now(), actor, politeness: 'none', text: '', region: '', regionCreatedWithMessage: false };
+    const read = await page
       .evaluate(() => {
         const w = window as unknown as { a11yAuditLog?: unknown[] };
-        const items = w.a11yAuditLog || [];
+        if (!Array.isArray(w.a11yAuditLog)) return { installed: false, items: [] as unknown[] };
+        const items = w.a11yAuditLog;
         w.a11yAuditLog = [];
-        return items;
+        return { installed: true, items };
       })
-      .catch(() => [] as unknown[]);
-    if (!log.length) {
-      // Make silent moments explicit: an expected announcement that never came is a finding candidate.
+      .catch((err) => ({ installed: false, items: [] as unknown[], error: String(err).slice(0, 200) }));
+    if (!read.installed) {
+      // Never report this as silence: the recorder was missing or the page could not be read.
       this.announcements.push({
-        t: Date.now(),
-        actor,
-        politeness: 'none',
-        text: '',
-        region: '',
-        regionCreatedWithMessage: false,
-        none: true,
+        ...base,
+        unavailable: true,
+        text: 'error' in read ? read.error : 'recorder not installed',
       });
       return;
     }
-    (log as Omit<Announcement, 'actor'>[]).forEach((item) => this.announcements.push({ ...item, actor }));
+    if (!read.items.length) {
+      // Make silent moments explicit: an expected announcement that never came is a finding candidate.
+      this.announcements.push({ ...base, none: true });
+      return;
+    }
+    (read.items as Omit<Announcement, 'actor'>[]).forEach((item) => this.announcements.push({ ...item, actor }));
   }
 
   note(id: string, value: unknown) {
@@ -524,6 +550,12 @@ export async function checkMenuSelection(page: PlaywrightPage, trigger: string, 
           attrs.forEach((a) => {
             o[a] = el.getAttribute(a);
           });
+          // Text a screen reader also gets: aria-describedby targets and visually hidden spans.
+          o.describedBy = (el.getAttribute('aria-describedby') || '')
+            .split(/\s+/)
+            .filter(Boolean)
+            .map((id) => document.getElementById(id)?.textContent?.trim() || `(missing id ${id})`)
+            .join(' | ');
           return o;
         }),
       { sel: itemSelector, attrs: ['role', 'aria-checked', 'aria-selected', 'aria-current', 'aria-label'] },

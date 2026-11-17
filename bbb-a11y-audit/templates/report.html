@@ -503,6 +503,10 @@ __DATA__
     subParts.push('<span class="mono">' + esc([D.meta.branch, D.meta.commit].filter(Boolean).join(' @ ')) + (D.meta.dirty ? ' (com alterações locais)' : '') + '</span>');
   }
   if (D.meta.scope) subParts.push('<span class="mono">' + esc(D.meta.scope) + '</span>');
+  if (D.meta.server && D.meta.server.url) {
+    subParts.push('<span>Servidor <span class="mono">' + esc(D.meta.server.url.replace(/^https?:\/\//, '')) + '</span>' +
+      (D.meta.server.html5ClientBuild || D.meta.server.bbbServerVersion ? ' · ' + esc(D.meta.server.bbbServerVersion || D.meta.server.html5ClientBuild) : '') + '</span>');
+  }
   $('sub').innerHTML = subParts.join('<i class="sep" aria-hidden="true"></i>');
 
   // Resumo

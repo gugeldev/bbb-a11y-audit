@@ -326,6 +326,13 @@ const output = {
     previousRunDir: prev?.name || null,
     previousRunScope: prev ? scopeKey(prev.data.meta) : null,
     example: !!meta.example,
+    server: (() => {
+      const s = (scenarios.find((x) => x.checks?.server) || {}).checks?.server;
+      if (!s) return null;
+      // Development builds leave the version placeholders unfilled.
+      const clean = (v) => (v && !/^HTML5_[A-Z_]+$/.test(v) ? v : null);
+      return { url: s.url, bbbServerVersion: clean(s.bbbServerVersion), html5ClientBuild: clean(s.html5ClientBuild) };
+    })(),
   },
   notes: {
     summary: meta.summary || '',

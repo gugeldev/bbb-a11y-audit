@@ -28,6 +28,7 @@ The normal way to work is **one topic at a time**: pick a guideline, audit every
 | `/bbb-a11y-audit <path>` | `path` | that folder or file, all criteria |
 | `/bbb-a11y-audit diff [base]` | `diff` | files changed vs `git merge-base HEAD <base>` (default base: the repo main branch, `v4.0.x-develop`) under `bigbluebutton-html5/` |
 | add `--no-runtime` | | skip the runtime layer |
+| add `--server <url> --secret <secret>` | | run the runtime layer against another BigBlueButton test server instead of the one in `bigbluebutton-tests/playwright/.env` (`<url>` like `https://host/bigbluebutton/`) |
 
 If the request is ambiguous, pick the closest mode and say which one you used. Do not ask.
 
@@ -59,7 +60,9 @@ Then triage every candidate as described in `references/static-patterns.md`: ope
 
 First make sure the runtime files are installed, following "Setting up the runtime layer" in `references/bbb-map.md`: the spec and recorder from `$SKILL/runtime/` must be in the BigBlueButton Playwright suite, and `@axe-core/playwright` in its dependencies. Copying them and installing the package is setup, not a code change to the application; do it when missing or outdated and mention it in the final message.
 
-Then check whether it can run (`bigbluebutton-tests/playwright/.env` has non-empty `BBB_URL` and `BBB_SECRET`, `node_modules` exists, a Chromium is installed). If anything is missing, skip the layer, record `"ran": false` with a short `reason`, and tell the user in the final message exactly what to set up. Do not try to install a BigBlueButton server or edit `.env`.
+With `--server`/`--secret`, pass them as `BBB_URL` and `BBB_SECRET` environment variables on the Playwright command (they take precedence over `.env`; never write them into `.env`). The report records the audited server and its client build (`meta.server`); if that build is not the local checkout's commit, say in `meta.summary` that runtime findings come from that server's version and their file and line references point at the local code, which may differ.
+
+Then check whether it can run (`bigbluebutton-tests/playwright/.env`, or `--server`/`--secret`, gives non-empty `BBB_URL` and `BBB_SECRET`, `node_modules` exists, a Chromium is installed). If anything is missing, skip the layer, record `"ran": false` with a short `reason`, and tell the user in the final message exactly what to set up. Do not try to install a BigBlueButton server or edit `.env`.
 
 When it can run, follow "Running the runtime layer" in `references/bbb-map.md` with `A11Y_AUDIT_DIR=<abs run dir>/raw/runtime`, plus `A11Y_GUIDELINES=<topic>` in topic modes (e.g. `2.1`): the spec then skips the checks and scenarios that cannot inform the topic and runs axe only with the topic's rules. Full run: about 8 minutes; a topic is usually faster. Allow 25 minutes. It runs six scenarios (moderator tour, moderator + attendee interactions, guest lobby, pt-BR, dark theme, mobile) and writes one JSON per scenario plus a screenshot of every state. Then:
 
