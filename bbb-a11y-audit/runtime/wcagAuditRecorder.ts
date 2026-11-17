@@ -130,7 +130,12 @@ export function announcementRecorderScript() {
       touched.forEach((region) => {
         const full = (region.textContent || '').replace(/\s+/g, ' ').trim();
         const previous = lastText.get(region) || '';
-        if (!full || previous === full) return;
+        if (!full) {
+          // The region was emptied: forget the old text, so the same message later is recorded again.
+          lastText.set(region, '');
+          return;
+        }
+        if (previous === full) return;
         lastText.set(region, full);
         // Live regions such as the chat log grow over time: keep only what was added.
         const text = previous && full.startsWith(previous) ? full.slice(previous.length).trim() : full;
