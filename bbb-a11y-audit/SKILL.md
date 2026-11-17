@@ -35,6 +35,15 @@ Create the run directory at the repo root: `a11y-reports/<YYYY-MM-DD_HHMM>[_<top
 
 In `guideline` and `criterion` modes set `meta.guidelines` / `meta.criteria` in findings.input.json, and in every layer look only at what can inform the topic (each step below says how). Criteria outside the topic are left out automatically.
 
+## Consistency rules (read before auditing)
+
+Two runs on the same code must reach the same result, and every finding must be real. So:
+
+1. **Start from the previous run.** Before looking for anything new, open the `findings.json` of the latest run of this topic (or the latest full run). Re-check every previous finding and every `discarded` entry against the current code: still present → keep its `key` (or set its `id`); gone → it is not a finding, and say in `meta.summary` why it is gone (code changed, or it was wrong). If the commit is the same as that run's (`meta.commit`) and a finding seems gone, assume you missed it and look again before dropping it.
+2. **Answer the checklist, then explore.** If `references/checklists.json` has items for a criterion in scope, answer every item with `pass`, `fail` or `na` and evidence (`coverage[c].checklist`). The checklist is the floor, not the ceiling: then look for anything else that can fail that criterion in BBB and write what you looked for in `coverage[c].explored`. Recurring things you find outside the checklist are worth proposing as new checklist items in the final message.
+3. **Prove every finding.** Static and review findings carry `quote`, the exact code at `location.line`; `build-report.mjs` rejects findings whose file, line or quote does not exist. Runtime findings point at the rule and screen they came from (`shots`). No proof, no finding.
+4. **No padding.** One finding is one fix; merge duplicates; do not split a problem to make the list longer, and do not report style preferences or best practices that do not fail a criterion. When in doubt, check again; if it is still unclear, write a screen-reader script instead of a finding.
+
 ## 2. Static layer
 
 ```bash
@@ -71,7 +80,7 @@ Do not report what you cannot point to. If something can only be confirmed by a 
 ## 5. Classify, cover, script
 
 - Classify each finding with `references/rubric.md` (impact, effort, shared, external, key).
-- Keep ids stable across runs: read the `findings.json` of the previous run of this topic (or the latest full run) and, for each problem that is still there, reuse its `key`, or set its `id` explicitly. Otherwise it shows up as "new" plus a false "fixed".
+- Keep ids stable across runs (consistency rule 1): reuse the previous `key`, or set `id` explicitly, for every problem that is still there.
 - Fill `coverage` for every in-scope criterion that is not failing (and add `method`/`how` to failing ones too), following the coverage rule in `references/criteria.md`: `pass` or `na` with `method` and `how`, `human` only for what truly needs a person (with its script), `not-covered` only when this run could not decide it (with what is missing). The goal is that a guideline can be closed with nothing left open; `build-report.mjs` refuses missing entries.
 - Write `manualChecks`: one for every `human` criterion, plus screen-reader confirmations for the core flows in scope (3–6 in total is typical).
 - Fill `meta.summary`, `meta.reviewedFlows` and `meta.notCovered`: they make the "O que foi testado" tab, which tells the reader exactly what was and was not checked.
@@ -84,16 +93,17 @@ Write `<run>/raw/findings.input.json` (schema in `references/rubric.md`), then:
 node $SKILL/scripts/build-report.mjs <run>
 ```
 
-It validates the input (fix and rerun if it complains), assigns stable IDs, puts each finding in this phase or backlog, adds the EN 301 549 clause, compares with the previous run (new, persisting, regressed, fixed, not re-checked) and writes `<run>/findings.json` and `<run>/report.html`. Open the report for the user (`xdg-open` on Linux, `open` on macOS).
+It validates the input (fix and rerun if it complains), assigns stable IDs, puts each finding in this phase or backlog, adds the EN 301 549 clause, checks that every file, line and quote exists, checks that every checklist item is answered, records the comparison with the previous run in `findings.json` (for the next run; the report does not show it) and writes `<run>/findings.json` and `<run>/report.html`. Open the report for the user (`xdg-open` on Linux, `open` on macOS).
 
 ## 7. Tell the user
 
 Keep the chat message short; the report holds the detail:
 
-- verdict, how many findings are for this phase and how many went to backlog (with why), and the change since the last run
+- verdict, which criteria pass and which fail, how many findings are for this phase and how many went to backlog (with why)
 - per guideline: done, how many criteria fail, or what is still open (`human`, `not-covered`)
 - which layers ran, which were skipped and why, which meeting states or flows were not covered
 - the blocker and high-impact findings as one line each (title, criterion, file)
+- proposed new checklist items, if exploration found recurring problems outside the checklist
 - the report path
 
 Offer to turn findings into tasks, grouped by guideline (one phase per guideline, one task per finding, plus one task per `human` criterion). Do not open issues or PRs unless asked.

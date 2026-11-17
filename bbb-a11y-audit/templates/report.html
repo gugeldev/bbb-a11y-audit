@@ -253,6 +253,16 @@ footer { margin-top: 96px; color: var(--muted); font-size: 0.8125rem; display: f
 .gl-findings button:hover { box-shadow: 0 0 0 1px var(--control); }
 .gl-findings .ef { color: var(--muted); white-space: nowrap; }
 
+.evs { grid-column: 2 / -1; display: grid; gap: 6px; }
+details.ev { font-size: 0.8125rem; }
+details.ev > summary { cursor: pointer; color: var(--fg-2); width: fit-content; border-radius: 6px; }
+details.ev > summary:hover { color: var(--fg); }
+details.ev ul { list-style: none; margin: 8px 0 4px; padding: 12px 14px; display: grid; gap: 10px; background: var(--card); border-radius: var(--r-nested); }
+.gl-row:not(.is-fail) details.ev ul { background: var(--soft); }
+details.ev li { line-height: 1.5; }
+details.ev .evtxt { color: var(--muted); }
+details.ev p.evtxt { margin: 6px 2px 0; }
+
 /* ---------- Prints com marcação ---------- */
 .shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; align-items: start; }
 .shot.portrait { max-width: 240px; }
@@ -387,10 +397,6 @@ details.ann > summary:hover { background: var(--soft-2); }
       <p class="intro">Roteiros para uma pessoa executar: critérios que só uma pessoa consegue decidir e confirmações com leitor de tela de verdade.</p>
       <div class="checks" id="checks"></div>
     </section>
-    <section role="tabpanel" id="panel-corrigidos" aria-labelledby="tab-corrigidos" hidden>
-      <p class="intro" id="fixed-intro"></p>
-      <div class="card fixed-list" id="fixed"></div>
-    </section>
   </main>
 
   <footer><span id="foot-l"></span><span id="foot-r"></span></footer>
@@ -512,11 +518,7 @@ __DATA__
   $('verdict-sub').textContent = subBits.length ? subBits.join(', ') + '.' : 'Todos os critérios do escopo passaram ou não se aplicam.';
   var nNew = F.filter(function (f) { return f.status === 'new'; }).length;
   var nReg = F.filter(function (f) { return f.status === 'regressed'; }).length;
-  $('changes').innerHTML = D.meta.previousRun
-    ? '<span class="pill t-accent">' + nNew + ' novos</span>' +
-      (nReg ? '<span class="pill t-red">' + nReg + ' regress' + (nReg === 1 ? 'ão' : 'ões') + '</span>' : '') +
-      '<span class="pill t-green">' + D.fixed.length + ' corrigidos</span>'
-    : '<span class="pill t-gray">Primeira execução</span>';
+  $('changes').innerHTML = '';
   var covOrder = ['fail', 'human', 'not-covered', 'pass', 'na', 'skip'];
   $('bar').innerHTML = covOrder.filter(function (k) { return k !== 'skip'; }).map(function (k) { return covCount[k] ? '<i style="flex:' + covCount[k] + ';background:' + COV_DOT[k] + '"></i>' : ''; }).join('');
   var covLabel = { fail: 'falham', human: 'precisam de pessoa', 'not-covered': 'não cobertos', pass: 'passaram', na: 'não se aplicam', skip: 'fora do escopo' };
@@ -527,7 +529,7 @@ __DATA__
   }).join('');
 
   // Abas
-  var TABS = [['diretrizes', 'Por diretriz', Object.keys(GUIDE).filter(glInScope).length], ['achados', 'Lista de achados', F.length], ['cobertura', 'O que foi testado', (D.scenarios || []).length + ' cenários'], ['leitor', 'Teste humano', D.manualChecks.length], ['corrigidos', 'Corrigidos', D.fixed.length]];
+  var TABS = [['diretrizes', 'Por diretriz', Object.keys(GUIDE).filter(glInScope).length], ['achados', 'Lista de achados', F.length], ['cobertura', 'O que foi testado', (D.scenarios || []).length + ' cenários'], ['leitor', 'Teste humano', D.manualChecks.length]];
   $('tabs').innerHTML = TABS.map(function (t, i) {
     return '<button role="tab" id="tab-' + t[0] + '" aria-controls="panel-' + t[0] + '" aria-selected="' + (i === 0) + '" tabindex="' + (i ? -1 : 0) + '">' + t[1] + '<span class="n">' + t[2] + '</span></button>';
   }).join('');
@@ -602,7 +604,7 @@ __DATA__
       html += '<section class="group" aria-labelledby="g' + p + '"><div class="group-head"><h2 id="g' + p + '"><i class="sq" style="background:' + BUCKET[p].dot + '" aria-hidden="true"></i>' + BUCKET[p].name + '<small class="hint">' + BUCKET[p].hint + '</small></h2><span class="n">' + g.length + ' ' + (g.length === 1 ? 'achado' : 'achados') + '</span></div><ul class="card rows">' +
         g.map(function (f) {
           var c = critInfo(f);
-          var st = f.status === 'new' ? '<span class="pill plain t-accent">Novo</span>' : f.status === 'regressed' ? '<span class="pill plain t-red">Regressão</span>' : '';
+          var st = '';
           return '<li><details id="' + f.id + '"><summary class="row">' +
             '<span class="chip">' + f.criterion + '</span>' +
             '<span class="main"><span class="t">' + esc(f.title) + '</span><span class="f">' + esc(shortFile(f.location.file)) + '</span></span>' +
@@ -697,6 +699,30 @@ __DATA__
   })();
 
   // Por diretriz
+  var AXE_EV = D.axeEvidence || {};
+  var CL_RESULT = { pass: ['ok', 't-green'], fail: ['falha', 't-red'], na: ['não se aplica', 't-gray'] };
+  function evidenceHtml(c, info) {
+    var ev = AXE_EV[c];
+    var parts = '';
+    if (ev && cov[c] !== 'skip') {
+      var rules = Object.keys(ev.rules);
+      var okRules = rules.filter(function (r) { return !ev.rules[r].failed; }).length;
+      parts += '<details class="ev"><summary>axe: ' + rules.length + (rules.length === 1 ? ' regra' : ' regras') + ' em ' + ev.screens + ' telas · ' + okRules + ' sem violação</summary><ul>' +
+        rules.map(function (r) {
+          var x = ev.rules[r];
+          return '<li><span class="mono">' + esc(r) + '</span> ' + esc(x.help) + ' <span class="pill plain ' + (x.failed ? 't-red' : 't-green') + '">' + (x.failed ? 'falhou em ' + x.failed + (x.failed === 1 ? ' tela' : ' telas') : 'passou em ' + x.passed + (x.passed === 1 ? ' tela' : ' telas')) + '</span></li>';
+        }).join('') + '</ul></details>';
+    }
+    if (info.checklist && info.checklist.length) {
+      var okN = info.checklist.filter(function (i) { return i.result === 'pass' || i.result === 'na'; }).length;
+      parts += '<details class="ev"><summary>Checklist: ' + okN + ' de ' + info.checklist.length + ' itens ok</summary><ul>' +
+        info.checklist.map(function (i) {
+          var r = CL_RESULT[i.result] || ['sem resposta', 't-orange'];
+          return '<li><span class="pill plain ' + r[1] + '">' + r[0] + '</span> <b>' + esc(i.label || i.text) + '</b><br><span class="evtxt">' + esc(i.evidence || '') + '</span></li>';
+        }).join('') + '</ul>' + (info.explored ? '<p class="evtxt"><b>Além do checklist:</b> ' + esc(info.explored) + '</p>' : '') + '</details>';
+    }
+    return parts ? '<div class="evs">' + parts + '</div>' : '';
+  }
   function guidelineStatus(list) {
     var n = { fail: 0, human: 0, 'not-covered': 0, pass: 0, na: 0, skip: 0 };
     list.forEach(function (c) { n[cov[c[0]]]++; });
@@ -732,6 +758,7 @@ __DATA__
             return '<div class="gl-row' + (s === 'fail' ? ' is-fail' : '') + '"><span class="num">' + c[0] + '</span><span class="nm">' + esc(c[2]) + '<span class="lv">' + c[1] + '</span></span>' +
               '<span class="tags">' + (method && s !== 'skip' ? '<span class="method">' + METHOD[method] + '</span>' : '') + '<span class="pill plain ' + COV[s][1] + '">' + COV[s][0] + '</span></span>' +
               (how ? '<span class="how">' + esc(how) + (s === 'human' && info.check ? ' Roteiro: ' + esc(info.check) + '.' : '') + '</span>' : '') +
+              evidenceHtml(c[0], info) +
               (cf.length ? '<ul class="gl-findings">' + cf.map(function (f) {
                 return '<li><button type="button" data-goto="' + f.id + '">' + impactTag(f) + '<span>' + esc(f.title) + '</span><span class="ef">' + IMPACT[f.impact] + ' · esforço ' + EFFORT[f.effort].toLowerCase() + '</span></button></li>';
               }).join('') + '</ul>' : '') +
@@ -760,20 +787,10 @@ __DATA__
       '</ol><p class="expect"><b>Esperado</b>' + esc(m.expect) + '</p></section>';
   }).join('');
 
-  // Corrigidos
-  var prev = D.meta.previousRun ? new Date(D.meta.previousRun).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' }) : null;
-  $('fixed-intro').textContent = prev
-    ? (D.fixed.length ? 'Achados da execução de ' + prev + ' que não aparecem mais.' : 'Nada foi corrigido desde a execução de ' + prev + '.')
-    : 'Esta é a primeira execução, então ainda não há com o que comparar.';
   if (!D.manualChecks.length) $('checks').innerHTML = '<div class="card empty">Nenhum roteiro gerado nesta execução.</div>';
-  $('fixed').innerHTML = D.fixed.map(function (f) {
-    return '<div class="fixed-row"><span class="chip">' + f.criterion + '</span><span>' + esc(f.title) + '<span class="id">' + f.id + '</span></span></div>';
-  }).join('');
 
   $('foot-l').textContent = 'Camadas: ' + (D.meta.layers || []).map(function (l) { return l.name + (l.ran ? '' : ' (não executada' + (l.reason ? ': ' + l.reason : '') + ')'); }).join(' · ');
-  $('foot-r').textContent = prev
-    ? 'Comparado com ' + (TOPIC && D.meta.previousRunScope === 'full' ? 'a auditoria completa de ' : (TOPIC ? 'a última auditoria deste tópico, de ' : '')) + prev
-    : 'Gerado por /bbb-a11y-audit';
+  $('foot-r').textContent = 'Gerado por /bbb-a11y-audit';
   if (TOPIC) {
     var topicName = TOPIC.map(function (s) { return s + (GUIDE[s] ? ' ' + GUIDE[s] : (PRINCIPLES[s] ? ' ' + PRINCIPLES[s][0] : (CRIT[s] ? ' ' + CRIT[s].name : ''))); }).join(', ');
     $('verdict-label').textContent = 'Tópico: ' + topicName;

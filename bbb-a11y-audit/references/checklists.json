@@ -1,0 +1,76 @@
+{
+  "4.1.2": [
+    {
+      "id": "4.1.2-a",
+      "text": "Every interactive element has an accessible name: buttons (including icon-only), links, inputs, selects, menu items, tabs, switches, sliders, custom widgets and controls inside third-party components (tldraw, BlockNote, react-select, players).",
+      "label": "Todo controle interativo tem nome acessível (inclusive botões só com ícone e controles de bibliotecas)"
+    },
+    {
+      "id": "4.1.2-b",
+      "text": "Every interactive element exposes the right role: no div/span/li with click handlers and no role, no role=button wrappers around real buttons, no interactive element nested inside another interactive element.",
+      "label": "Todo controle expõe o papel certo (sem div clicável sem papel, sem botão dentro de botão)"
+    },
+    {
+      "id": "4.1.2-c",
+      "text": "Toggle and selection states are exposed and update when they change: aria-pressed for toggle buttons (mute, webcam, raise hand, mode buttons), aria-checked or native checked for switches, checkboxes and radios, aria-selected or aria-current for the current tab, menu choice or list item, aria-expanded on every control that opens a menu, popover, panel or accordion.",
+      "label": "Estados (pressionado, marcado, selecionado, expandido) são expostos e atualizados"
+    },
+    {
+      "id": "4.1.2-d",
+      "text": "Disabled and read-only states are exposed (disabled or aria-disabled) wherever a control looks or behaves disabled.",
+      "label": "Estado desabilitado é exposto onde o controle parece ou está desabilitado"
+    },
+    {
+      "id": "4.1.2-e",
+      "text": "Values are exposed for value controls: sliders (volume), spin buttons and number fields (timer), progress bars (upload), with aria-valuenow / aria-valuetext where native semantics are missing.",
+      "label": "Valores são expostos em controles de valor (volume, timer, progresso de upload)"
+    },
+    {
+      "id": "4.1.2-f",
+      "text": "Composite widgets are complete and consistent: tablist/tab/tabpanel, menu/menuitem, listbox/option, combobox/listbox, grid; aria-controls, aria-labelledby, aria-describedby and aria-activedescendant point to ids that exist.",
+      "label": "Componentes compostos (abas, menus, listas, combobox) estão completos e referências por id existem"
+    },
+    {
+      "id": "4.1.2-g",
+      "text": "Frames and embedded content (iframes for external video, plugins, apps gallery) have a title or accessible name.",
+      "label": "Iframes e conteúdo embutido têm título"
+    },
+    {
+      "id": "4.1.2-h",
+      "text": "Names are real text, not leaked objects or ids: no '[object Object]', untranslated message ids, empty strings or 'undefined' in aria-label, title or visible labels used as names.",
+      "label": "Nomes são texto de verdade (sem \"[object Object]\", ids de mensagem ou \"undefined\")"
+    }
+  ],
+  "4.1.3": [
+    {
+      "id": "4.1.3-a",
+      "text": "Confirmations are announced without moving focus: message sent, settings saved, copied to clipboard, file uploaded, recording started or stopped, poll published.",
+      "label": "Confirmações (enviado, salvo, copiado, upload concluído, gravação iniciada) são anunciadas"
+    },
+    {
+      "id": "4.1.3-b",
+      "text": "Errors that are not tied to a focused field are announced: chat send failures, device and permission errors (microphone, camera, screen share), upload errors, connection problems, form errors shown after submit.",
+      "label": "Erros (chat, dispositivos, upload, conexão, formulários) são anunciados"
+    },
+    {
+      "id": "4.1.3-c",
+      "text": "Progress and waiting states are announced: connecting audio, uploading or converting a presentation, waiting for approval in the guest lobby, reconnecting.",
+      "label": "Progresso e espera (conectando áudio, convertendo apresentação, aguardando aprovação) são anunciados"
+    },
+    {
+      "id": "4.1.3-d",
+      "text": "Meeting events are announced: someone joins or leaves, raises a hand, is made presenter, is muted by a moderator; a poll starts or ends; a breakout room starts or ends; new chat messages with the chat open and with it closed; a guest is waiting for approval.",
+      "label": "Eventos da reunião (entrou, saiu, mão levantada, apresentador, enquete, breakout, chat aberto e fechado, convidado aguardando) são anunciados"
+    },
+    {
+      "id": "4.1.3-e",
+      "text": "Live regions are present before their content changes (not mounted together with the message), use a suitable politeness (alert only for errors and urgent events), and are not duplicated so the same message is not read twice.",
+      "label": "Regiões de anúncio existem antes da mensagem, usam a urgência certa e não duplicam"
+    },
+    {
+      "id": "4.1.3-f",
+      "text": "Announcements do not flood: bursts (many chat messages, many joins) are grouped or throttled, and toasts that auto-dismiss are announced once.",
+      "label": "Anúncios não inundam o leitor de tela (rajadas agrupadas, toasts anunciados uma vez)"
+    }
+  ]
+}

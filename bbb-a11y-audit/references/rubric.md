@@ -102,6 +102,7 @@ Write `title`, `affects`, `fix` and `verify` in the language of the person runni
       "shared": true,
       "external": false,
       "evidence": "<meta name=\"viewport\" content=\"... maximum-scale=1, user-scalable=no ...\">",
+      "quote": "maximum-scale=1, user-scalable=no",
       "affects": "Quem tem baixa visão não consegue ampliar a tela no celular.",
       "fix": "Remover maximum-scale=1 e user-scalable=no da meta viewport.",
       "verify": "No celular, ampliar com pinça deve funcionar; axe meta-viewport sem violações.",
@@ -124,9 +125,12 @@ Write `title`, `affects`, `fix` and `verify` in the language of the person runni
 
 Field rules:
 
+- `quote` (required for `static` and `review` findings with a line): an exact piece of the code at `location.line` (whitespace is normalized; it is searched within 5 lines). It proves the file and line are real.
+
 - `criterion`: WCAG 2.2 A/AA number. For EN 301 549 clauses outside WCAG (9.6, 9.7) set `"standard": "EN"`, `"criterionName": "Preferências do usuário"`.
 - `source`: `static`, `runtime` or `review` (the layer that found it).
 - `location.file`: repo-relative path of the place to fix. For runtime findings, trace the selector back to the source file; if you cannot, use the closest component directory and say so in `evidence`.
+- `coverage[c].checklist` and `coverage[c].explored`: required for criteria that have items in `checklists.json`, failing or not. Each item: `{ "id": "4.1.2-a", "result": "pass" | "fail" | "na", "evidence": "…" }` (for `fail`, name the finding keys in the evidence). `explored`: one or two sentences on what else you looked for.
 - `coverage`: one entry per in-scope criterion that is **not** failing (failing criteria may also get an entry with just `method` and `how`, to say how they were checked; their status comes from the findings), as `{ status, method, how, check? }` with status `pass`, `na`, `human`, `not-covered` (or `skip` outside the scope; added automatically when `meta.criteria` or `meta.guidelines` is set). Failing criteria are derived from findings. Rules are in `criteria.md` ("Coverage rule").
 - `meta.guidelines` (guideline mode) and `meta.criteria` (criterion mode): the requested scope, e.g. `["1.4"]` or `["2.4.7"]`.
 - `discarded`: every candidate you rejected (fields: `source`, `file` and `line` when it has them, `state` for runtime candidates, `reason`): static pattern, eslint message, axe `incomplete`, custom runtime check), with the reason. Use `source` values like `static:outline-none`, `eslint:control-has-associated-label`, `axe:aria-valid-attr-value`, `runtime:keyboard.obscured`. This keeps triage honest and lets the next run skip known false positives.

@@ -80,6 +80,8 @@ interface StateRecord {
   lang?: string;
   violations?: AxeRuleSummary[];
   incomplete?: AxeRuleSummary[];
+  /** Rules that ran and passed in this state: evidence for criteria that pass. */
+  passes?: Array<{ id: string; help: string; tags: string[]; nodeCount: number }>;
   elements?: Record<string, Box>;
 }
 
@@ -253,6 +255,12 @@ export class AuditRecorder {
       const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
       record.violations = await summarize(page, results.violations);
       record.incomplete = await summarize(page, results.incomplete);
+      record.passes = results.passes.map((rule) => ({
+        id: rule.id,
+        help: rule.help,
+        tags: rule.tags.filter((tag) => tag.startsWith('wcag')),
+        nodeCount: rule.nodes.length,
+      }));
       record.ok = true;
     } catch (err) {
       record.error = String(err).split('\n').slice(0, 3).join(' ').slice(0, 500);

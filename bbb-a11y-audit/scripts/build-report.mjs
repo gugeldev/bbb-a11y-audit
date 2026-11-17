@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TEMPLATE = join(HERE, '..', 'templates', 'report.html');
+const CHECKLISTS = JSON.parse(readFileSync(join(HERE, '..', 'references', 'checklists.json'), 'utf8'));
 
 const IMPACTS = ['blocker', 'high', 'medium', 'low'];
 const EFFORTS = ['S', 'M', 'L'];
@@ -156,6 +157,7 @@ const findings = (input.findings || []).map((f, i) => {
     fix: f.fix || '',
     verify: f.verify || '',
     en: f.standard === 'EN' ? f.criterion : `9.${f.criterion}`,
+    quote: f.quote || '',
     evidenceShots: (f.shots || []).map((ref) => resolveShot(ref, where)).filter(Boolean),
   };
 });
@@ -197,6 +199,61 @@ for (const c of WCAG) {
       if (o.status === 'not-covered' && !o.how) problems.push(`coverage ${c}: "not-covered" needs "how" (what is missing)`);
       coverage[c] = { status: o.status, method: o.method || (o.status === 'human' ? 'human' : ''), how: o.how || '', check: o.check || '' };
     }
+  }
+}
+
+// ---------- Evidence must exist (anti-hallucination) ----------
+const repoRoot = git('rev-parse --show-toplevel');
+const norm = (s) => String(s).replace(/\s+/g, ' ').trim();
+const fileLines = new Map();
+const readLines = (file) => {
+  if (!fileLines.has(file)) {
+    const abs = join(repoRoot, file);
+    fileLines.set(file, existsSync(abs) ? readFileSync(abs, 'utf8').split('\n') : null);
+  }
+  return fileLines.get(file);
+};
+if (!repoRoot) warnings.push('not inside a git repository: file, line and quote checks were skipped');
+for (const f of findings) {
+  if (!repoRoot) break;
+  const where = `finding "${f.title}"`;
+  for (const loc of [f.location, ...f.relatedLocations]) {
+    if (!loc.file) continue;
+    const lines = readLines(loc.file);
+    if (!lines) {
+      problems.push(`${where}: file "${loc.file}" does not exist (paths are repo-relative)`);
+    } else if (loc.line && (loc.line < 1 || loc.line > lines.length)) {
+      problems.push(`${where}: ${loc.file} has ${lines.length} lines, line ${loc.line} does not exist`);
+    }
+  }
+  const lines = f.location.file ? readLines(f.location.file) : null;
+  if (lines && f.quote) {
+    const from = f.location.line ? Math.max(0, f.location.line - 6) : 0;
+    const to = f.location.line ? Math.min(lines.length, f.location.line + 5) : lines.length;
+    if (!norm(lines.slice(from, to).join(' ')).includes(norm(f.quote))) {
+      problems.push(`${where}: "quote" is not found in ${f.location.file}${f.location.line ? ` around line ${f.location.line}` : ''}`);
+    }
+  } else if (lines && (f.source === 'static' || f.source === 'review') && f.location.line) {
+    problems.push(`${where}: static and review findings need "quote" (the exact code at location.line)`);
+  }
+}
+
+// ---------- Checklists: the floor every run must cover ----------
+for (const [c, items] of Object.entries(CHECKLISTS)) {
+  if (!WCAG.has(c) || !inCriteriaScope(c) || coverage[c]?.status === 'skip') continue;
+  const entry = (input.coverage || {})[c] || {};
+  const answered = new Map((entry.checklist || []).map((x) => [x.id, x]));
+  for (const item of items) {
+    const a = answered.get(item.id);
+    if (!a) problems.push(`coverage ${c}: checklist item ${item.id} not answered ("${item.text}")`);
+    else if (!['pass', 'fail', 'na'].includes(a.result) || !a.evidence) {
+      problems.push(`coverage ${c}: checklist item ${item.id} needs "result" (pass, fail, na) and "evidence"`);
+    }
+  }
+  if (!entry.explored) problems.push(`coverage ${c}: "explored" is required (what you looked for beyond the checklist)`);
+  if (coverage[c]) {
+    coverage[c].checklist = items.map((item) => ({ ...item, ...(answered.get(item.id) || {}) }));
+    coverage[c].explored = entry.explored || '';
   }
 }
 
@@ -275,6 +332,34 @@ const output = {
     reviewedFlows: meta.reviewedFlows || [],
     notCovered: meta.notCovered || [],
   },
+  axeEvidence: (() => {
+    // Per criterion: which axe rules ran (passed or failed) and in how many screens.
+    const ev = {};
+    for (const s of scenarios) {
+      for (const st of s.states || []) {
+        if (!st.ok) continue;
+        const seen = new Set();
+        const add = (rule, kind) => {
+          for (const tag of rule.tags || []) {
+            const m = /^wcag(\d)(\d)(\d+)$/.exec(tag);
+            if (!m) continue;
+            const c = `${m[1]}.${m[2]}.${m[3]}`;
+            if (!WCAG.has(c)) continue;
+            ev[c] = ev[c] || { screens: 0, rules: {} };
+            const r = (ev[c].rules[rule.id] = ev[c].rules[rule.id] || { help: rule.help, passed: 0, failed: 0 });
+            r[kind] += 1;
+            if (!seen.has(c)) {
+              seen.add(c);
+              ev[c].screens += 1;
+            }
+          }
+        };
+        (st.passes || []).forEach((r) => add(r, 'passed'));
+        (st.violations || []).forEach((r) => add(r, 'failed'));
+      }
+    }
+    return ev;
+  })(),
   scenarios: scenarios.map((s) => ({
     id: s.id,
     name: s.name,
