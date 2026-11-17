@@ -1,11 +1,28 @@
 # WCAG 2.2 A/AA checklist for BigBlueButton
 
-55 criteria. **How** says which layer can evaluate it:
-`S` static scan / eslint, `R` runtime (axe or a custom check in `wcagAudit.spec.ts`), `V` guided review (read the code of the flows in `bbb-map.md`), `M` needs a person (screen reader, real device, judgement about media).
+55 criteria. **How** says which layer can decide it:
+`S` static scan / eslint, `R` runtime (axe or a custom check in `wcagAudit.spec.ts`), `V` the agent reading code, screenshots and runtime data, `H` only a person can decide (judging media content).
 
 Always classify axe results by their `wcag…` tag; the axe names in this table are hints, not the mapping.
 
-**Coverage rule** (for `coverage` in findings.input.json): mark `pass` only when a layer marked here ran in this audit and found nothing. If the only layers that can decide it are `M`, or the deciding layer did not run, mark `manual`. Mark `na` only when the condition of the criterion does not exist in the audited scope, and say why in the report summary. In `criterio` or `diff` modes, criteria outside the request are `skip`.
+## Coverage rule
+
+The goal is that every guideline can be closed completely. Every criterion in scope ends in exactly one status (`coverage` in findings.input.json, one entry per criterion that is not failing):
+
+| Status | Use when | Required fields |
+| --- | --- | --- |
+| `fail` | derived from findings; do not write it | — |
+| `pass` | the criterion was checked across the scope and nothing fails | `method`, `how` |
+| `na` | the condition of the criterion does not exist in the scope (no prerecorded media, no authentication) | `method`, `how` (why it does not apply) |
+| `human` | **only** criteria marked `H` whose decision needs a person (quality of captions or audio description that exists) | `how`, `check` (the `flow` name of the manual check with the script) |
+| `not-covered` | a decidable criterion this run could not decide (a state did not open, a layer did not run) | `how` (what is missing and how to get it) |
+| `skip` | outside the requested scope (`criterio`, `diretriz`, `diff`, `path` modes) | — |
+
+`method` is `tool` (axe, a custom check or the static scan decided it), `agent` (you decided it by reading code, screenshots or runtime data) or `human`. `how` is one plain sentence in the report language, e.g. "axe color-contrast em 57 telas, tema claro e escuro" or "li os handlers de teclado de user-list e chat; nenhum atalho de uma tecla".
+
+**Never** mark a criterion `human` or `not-covered` because reading the code would take time: if `S`, `R` or `V` can decide it, decide it (in `full` mode, prioritize core flows but still decide every criterion for the whole client; in `diretriz` mode, go through every flow). Screen-reader confirmation of announcements is recommended (`manualChecks`) but does not block `pass`/`fail` of 4.1.3: decide it from the `announcements` data and the code.
+
+Format: `"coverage": { "1.4.3": { "status": "pass", "method": "tool", "how": "…" }, "1.2.2": { "status": "human", "how": "…", "check": "Legendas do vídeo externo" } }`.
 
 The EN 301 549 clause for each is `9.` + the number (1.1.1 → 9.1.1.1).
 
@@ -14,11 +31,11 @@ The EN 301 549 clause for each is `9.` + the number (1.1.1 → 9.1.1.1).
 | SC | Lvl | How | What to check in BBB |
 | --- | --- | --- | --- |
 | 1.1.1 Non-text Content | A | S R V | Icon-only buttons (`Styled.Button` with `icon` and `hideLabel`) need a label; avatars, reaction emojis, whiteboard images, presentation slides (slide text alternative), decorative SVG hidden with `aria-hidden`. axe: `image-alt`, `button-name`, `svg-img-alt`, `role-img-alt`. |
-| 1.2.1 Audio-only and Video-only (Prerecorded) | A | M | Only if the scope plays prerecorded media (external video, recordings). The HTML5 client itself usually `na`. |
-| 1.2.2 Captions (Prerecorded) | A | M | Same as 1.2.1. External video player: can it show captions the source has? |
-| 1.2.3 Audio Description or Media Alternative | A | M | Same as 1.2.1. |
-| 1.2.4 Captions (Live) | AA | V M | Live captions feature (`audio/audio-graphql/audio-captions`): available, can be turned on by any user, synchronized. |
-| 1.2.5 Audio Description (Prerecorded) | AA | M | Same as 1.2.1. |
+| 1.2.1 Audio-only and Video-only (Prerecorded) | A | V H | Only if the scope plays prerecorded media (external video, recordings). The HTML5 client itself usually `na`. Decide `na` by checking the scope (V). If such media is present, whether its alternatives exist is `V`; judging their quality is `H`. |
+| 1.2.2 Captions (Prerecorded) | A | V H | Same as 1.2.1. External video player: can it show captions the source has? |
+| 1.2.3 Audio Description or Media Alternative | A | V H | Same as 1.2.1. |
+| 1.2.4 Captions (Live) | AA | R V H | Live captions feature (`audio/audio-graphql/audio-captions`): available, can be turned on by any user, synchronized. That the feature exists and is operable is `R`/`V`; caption accuracy and delay are `H`. |
+| 1.2.5 Audio Description (Prerecorded) | AA | V H | Same as 1.2.1. |
 | 1.3.1 Info and Relationships | A | S R V | Headings in panels, lists rendered as lists (user list, chat), form labels, tables (breakout assignment). axe: `list`, `listitem`, `label`, `heading-order`, `aria-required-children`. |
 | 1.3.2 Meaningful Sequence | A | R V | DOM order vs visual order in the layout manager (absolute positioning of sidebar, media, webcams). Keyboard walk order is a proxy. |
 | 1.3.3 Sensory Characteristics | A | V | Instructions in locale strings (`public/locales/en.json`) that rely on color, shape or position ("click the green button"). |
@@ -27,20 +44,20 @@ The EN 301 549 clause for each is `9.` + the number (1.1.1 → 9.1.1.1).
 | 1.4.1 Use of Color | A | V R | Status shown only by color: talking indicator, mute state, presenter/moderator markers, poll errors, connection status. axe: `link-in-text-block`. |
 | 1.4.2 Audio Control | A | S V | Autoplaying audio (notification sounds are short; check anything over 3 s). |
 | 1.4.3 Contrast (Minimum) | AA | R | axe `color-contrast`. Check both light and dark themes if the client has one. |
-| 1.4.4 Resize Text | AA | S R M | `meta viewport` zoom blocking (`client/main.html`), fixed px heights clipping text at 200%. |
+| 1.4.4 Resize Text | AA | S R V | `meta viewport` zoom blocking (`client/main.html`), fixed px heights clipping text at 200%. |
 | 1.4.5 Images of Text | AA | V | Text baked into images or SVG icons used as words. |
 | 1.4.10 Reflow | AA | R | Custom check `reflow` (320 px). Offenders are listed with data-test/class. |
 | 1.4.11 Non-text Contrast | AA | R | `nonTextContrast` check (borders, icons, focus rings ≥ 3:1). Already known: 4.0 borders fail (see the comment in `accessibility/nonTextContrast.spec.ts`). |
 | 1.4.12 Text Spacing | AA | R | Custom check `textSpacing`: text newly clipped after applying WCAG spacing. |
-| 1.4.13 Content on Hover or Focus | AA | V M | Tooltips (`common/tooltip`, tippy): dismissible with Esc, hoverable, persistent. |
+| 1.4.13 Content on Hover or Focus | AA | R V | Tooltips (`common/tooltip`, tippy): dismissible with Esc, hoverable, persistent. Runtime `hoverFocus` checks real tooltips: appears on hover and on focus, Esc dismisses without moving the pointer, stays while the pointer moves onto it. |
 
 ## 2 Operable
 
 | SC | Lvl | How | What to check in BBB |
 | --- | --- | --- | --- |
-| 2.1.1 Keyboard | A | S R V | Every control reachable and operable by keyboard: custom dropdowns, whiteboard toolbar, video tiles menu, reactions, drag-only features. eslint: `click-events-have-key-events`, `interactive-supports-focus`, `no-static-element-interactions`. Runtime `keyboard` walk. Freehand drawing is the documented exception. The runtime walks only cover the states listed in `bbb-map.md`; other flows need the review, and stay `manual` if neither covered them. |
+| 2.1.1 Keyboard | A | S R V | Every control reachable and operable by keyboard: custom dropdowns, whiteboard toolbar, video tiles menu, reactions, drag-only features. eslint: `click-events-have-key-events`, `interactive-supports-focus`, `no-static-element-interactions`. Runtime `keyboard` walk. Freehand drawing is the documented exception. The runtime walks only cover the states listed in `bbb-map.md`; other flows need the review (read their key handlers) until decided. |
 | 2.1.2 No Keyboard Trap | A | R V | Runtime `keyboard.possibleTrap`; modals must close with Esc; focus traps in whiteboard and shared notes editors must have a way out. |
-| 2.1.4 Character Key Shortcuts | A | V | Single-key shortcuts (no modifier). BBB shortcuts use Alt+Shift (accesskey), which is fine. Check whiteboard (tldraw) single-letter tool shortcuts: can they be turned off or are they only active when the canvas has focus? |
+| 2.1.4 Character Key Shortcuts | A | S V | Single-key shortcuts (no modifier). BBB shortcuts use Alt+Shift (accesskey), which is fine. Check whiteboard (tldraw) single-letter tool shortcuts: can they be turned off or are they only active when the canvas has focus? Static pattern `single-key-shortcut` lists keydown handlers comparing `key` to a single character. |
 | 2.2.1 Timing Adjustable | A | V | Session or inactivity timeouts (activity check modal), auto-dismissing notifications/toasts with actions in them. |
 | 2.2.2 Pause, Stop, Hide | A | V | Animations over 5 s (emoji rain, raise-hand animation), auto-updating content. Respect `prefers-reduced-motion`. |
 | 2.3.1 Three Flashes or Below Threshold | A | V | Flashing alerts or animations. Usually `pass` after review. |
@@ -64,7 +81,7 @@ The EN 301 549 clause for each is `9.` + the number (1.1.1 → 9.1.1.1).
 | SC | Lvl | How | What to check in BBB |
 | --- | --- | --- | --- |
 | 3.1.1 Language of Page | A | R V | `<html lang>` follows the chosen locale (`imports/startup/client/intlAdapter.tsx`). axe: `html-has-lang`, `html-lang-valid`. |
-| 3.1.2 Language of Parts | AA | V M | Locale selector items carry `lang` (`common/locales-dropdown`). User content is out of scope. |
+| 3.1.2 Language of Parts | AA | V | Locale selector items carry `lang` (`common/locales-dropdown`). User content is out of scope. |
 | 3.2.1 On Focus | A | V | Nothing opens or navigates when an element just receives focus. |
 | 3.2.2 On Input | A | V | Selects/toggles that apply settings immediately and move focus or change view without warning (settings modal, layout selector). |
 | 3.2.3 Consistent Navigation | AA | V | Applies to sets of pages; within the client, sidebar navigation order stays the same. Often `na` with explanation. |

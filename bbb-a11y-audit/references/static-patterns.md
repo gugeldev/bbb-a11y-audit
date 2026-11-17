@@ -32,6 +32,7 @@ File formats:
 | `placeholder-as-label` | 3.3.2 | Check for a `<label htmlFor>` elsewhere or a label prop on the wrapper component. |
 | `autoplay-media` | 1.4.2 | Only a problem if sound plays over 3 s without controls. |
 | `viewport-zoom-blocked` | 1.4.4 | Real failure when `user-scalable=no` or `maximum-scale=1` is present. One finding, shared. |
+| `single-key-shortcut` | 2.1.4 | Read the handler: discard if it checks `ctrlKey`/`altKey`/`metaKey` (Shift alone is not enough), if it is attached to a focused widget only (an input, a menu, the whiteboard canvas while focused), or if there is a setting to turn it off or remap it. Otherwise it fails 2.1.4. |
 | `forced-colors-none` | EN 9.7 | Report with `"standard": "EN"` unless the element truly needs exact colors (color picker swatches). |
 | `html-font-size-px` | EN 9.7 | Low impact. Note it, do not inflate it. |
 

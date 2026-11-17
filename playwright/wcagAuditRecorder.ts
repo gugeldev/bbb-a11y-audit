@@ -422,6 +422,69 @@ export async function checkFocusReturn(page: PlaywrightPage, trigger: string) {
   }
 }
 
+/**
+ * 1.4.13 Content on Hover or Focus: for each trigger, check that its tooltip appears on hover and on
+ * keyboard focus, that Escape dismisses it without moving the pointer, and that it stays while the
+ * pointer moves onto it. Tooltips already on screen before the hover (persistent hints) are ignored.
+ */
+export async function checkHoverFocus(page: PlaywrightPage, triggers: string[]) {
+  const SELECTORS = ['[role="tooltip"]', '[data-tippy-root]', '.MuiTooltip-popper'];
+  const fresh = page.locator(SELECTORS.map((s) => `${s}:not([data-a11y-pre]):visible`).join(', '));
+  const markExisting = () =>
+    page.evaluate((sels) => {
+      document.querySelectorAll('[data-a11y-pre]').forEach((el) => el.removeAttribute('data-a11y-pre'));
+      document.querySelectorAll(sels.join(',')).forEach((el) => el.setAttribute('data-a11y-pre', '1'));
+    }, SELECTORS);
+  const waitGone = async (ms: number) => {
+    const end = Date.now() + ms;
+    while ((await fresh.count()) > 0 && Date.now() < end) await page.waitForTimeout(100);
+    return (await fresh.count()) === 0;
+  };
+  const reset = async () => {
+    await page.mouse.move(1, 1);
+    await page.keyboard.press('Escape');
+    await waitGone(1500);
+    await page.waitForTimeout(300);
+    await markExisting();
+  };
+  const results: Array<Record<string, unknown>> = [];
+  for (const trigger of triggers) {
+    const r: Record<string, unknown> = { trigger };
+    try {
+      const loc = page.locator(trigger).first();
+      if (!(await loc.isVisible())) throw new Error('trigger not visible');
+      await reset();
+      await loc.hover();
+      await page.waitForTimeout(700);
+      r.appearsOnHover = (await fresh.count()) > 0;
+      if (r.appearsOnHover) {
+        r.text = ((await fresh.first().textContent()) || '').trim().slice(0, 80);
+        await page.keyboard.press('Escape');
+        r.dismissibleWithEscape = await waitGone(1000);
+        await reset();
+        await loc.hover();
+        await page.waitForTimeout(700);
+        const box = await fresh.first().boundingBox();
+        if (box) {
+          await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 8 });
+          await page.waitForTimeout(500);
+          r.hoverable = (await fresh.count()) > 0;
+        }
+      }
+      await reset();
+      await loc.focus();
+      await page.waitForTimeout(700);
+      r.appearsOnFocus = (await fresh.count()) > 0;
+    } catch (err) {
+      r.error = String(err).split('\n')[0].slice(0, 200);
+    }
+    results.push(r);
+  }
+  await page.mouse.move(1, 1);
+  await page.keyboard.press('Escape');
+  return results;
+}
+
 /** 2.1.1 / 2.1.2 / 2.4.3 / 2.4.7 / 2.4.11: walk the page with Tab and describe every focus stop. */
 export async function checkKeyboard(page: PlaywrightPage, maxStops = 80) {
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());

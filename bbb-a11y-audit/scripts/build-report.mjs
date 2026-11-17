@@ -160,6 +160,39 @@ for (const f of findings) {
   if (seen.has(f.id)) problems.push(`duplicate id ${f.id} ("${seen.get(f.id)}" and "${f.title}"): merge them or give them different keys`);
   seen.set(f.id, f.title);
 }
+// ---------- Coverage: every in-scope criterion must end decided ----------
+const STATUSES = ['pass', 'na', 'human', 'not-covered', 'skip'];
+const METHODS = ['tool', 'agent', 'human'];
+const metaIn = input.meta || {};
+const inCriteriaScope = (c) =>
+  (!metaIn.criteria || metaIn.criteria.includes(c)) &&
+  (!metaIn.guidelines || metaIn.guidelines.some((g) => c.startsWith(`${g}.`)));
+const failing = new Set(findings.filter((f) => f.standard !== 'EN').map((f) => f.criterion));
+const manualFlows = new Set((input.manualChecks || []).map((m) => m.flow));
+const coverage = {};
+for (const c of WCAG) {
+  if (failing.has(c)) {
+    coverage[c] = { status: 'fail' };
+  } else if (!inCriteriaScope(c)) {
+    coverage[c] = { status: 'skip' };
+  } else {
+    let o = (input.coverage || {})[c];
+    if (typeof o === 'string') o = { status: o === 'manual' ? 'not-covered' : o };
+    if (!o) {
+      problems.push(`coverage ${c}: missing (every in-scope criterion needs pass, na, human or not-covered)`);
+    } else {
+      if (!STATUSES.includes(o.status)) problems.push(`coverage ${c}: status "${o.status}" must be one of ${STATUSES.join(', ')}`);
+      if (['pass', 'na'].includes(o.status) && (!METHODS.includes(o.method) || !o.how)) {
+        problems.push(`coverage ${c}: "${o.status}" needs "method" (${METHODS.join(', ')}) and "how"`);
+      }
+      if (o.status === 'human' && (!o.how || !o.check)) problems.push(`coverage ${c}: "human" needs "how" and "check" (a manualChecks flow)`);
+      if (o.status === 'human' && o.check && !manualFlows.has(o.check)) problems.push(`coverage ${c}: check "${o.check}" is not a manualChecks flow`);
+      if (o.status === 'not-covered' && !o.how) problems.push(`coverage ${c}: "not-covered" needs "how" (what is missing)`);
+      coverage[c] = { status: o.status, method: o.method || (o.status === 'human' ? 'human' : ''), how: o.how || '', check: o.check || '' };
+    }
+  }
+}
+
 if (problems.length) fail(`fix findings.input.json:\n  - ${problems.join('\n  - ')}`);
 
 // ---------- Compare with previous runs ----------
@@ -190,7 +223,7 @@ const criteriaScope = meta.criteria || null;
 const inScope = (f) =>
   layersRan.has(f.source) &&
   (!scopePaths.length || scopePaths.some((p) => f.location.file.startsWith(p))) &&
-  (!criteriaScope || criteriaScope.includes(f.criterion));
+  (f.standard === 'EN' || inCriteriaScope(f.criterion));
 const currentIds = new Set(findings.map((f) => f.id));
 const fixed = [];
 const notRechecked = [];
@@ -210,6 +243,7 @@ const output = {
     scope: meta.scope || '',
     scopePaths,
     criteria: criteriaScope,
+    guidelines: meta.guidelines || null,
     mode: meta.mode || 'full',
     layers: meta.layers || [],
     previousRun: prev?.data.meta?.date || null,
@@ -246,7 +280,7 @@ const output = {
     })),
   })),
   findings: findings.sort((a, b) => a.priority - b.priority || IMPACTS.indexOf(a.impact) - IMPACTS.indexOf(b.impact)),
-  coverage: input.coverage || {},
+  coverage,
   fixed,
   notRechecked,
   discarded: input.discarded || [],
@@ -266,6 +300,11 @@ console.log(
   [
     `report: ${join(runDir, 'report.html')}`,
     `findings: ${output.findings.length} (P1 ${count((f) => f.priority === 1)}, P2 ${count((f) => f.priority === 2)}, P3 ${count((f) => f.priority === 3)}, P4 ${count((f) => f.priority === 4)})`,
+    `coverage: ${Object.entries(
+      Object.values(coverage).reduce((acc, o) => ({ ...acc, [o.status]: (acc[o.status] || 0) + 1 }), {}),
+    )
+      .map(([k, v]) => `${k} ${v}`)
+      .join(', ')}`,
     `runtime: ${scenarios.length} scenarios, ${stateIndex.size} states, ${Object.keys(shots).length} screenshots embedded`,
     prev
       ? `vs ${prev.name}: ${count((f) => f.status === 'new')} new, ${count((f) => f.status === 'regressed')} regressed, ${fixed.length} fixed, ${notRechecked.length} not re-checked`

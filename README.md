@@ -19,4 +19,6 @@ Each finding comes with the criterion, evidence, a screenshot with the problem m
 
 ## Use
 
-Ask your agent to run the `a11y-audit` skill, for the whole client, a folder, a single criterion, or just the branch diff. Reports go to `a11y-reports/<date>_<time>/report.html`, and each run is compared with the previous one.
+Ask your agent to run the `a11y-audit` skill, for the whole client, one guideline (e.g. `diretriz 1.4`), a single criterion, a folder, or just the branch diff.
+
+The report is organized by principle and guideline, so each guideline can be a work phase. Every criterion ends up failing, passing, not applicable, or, only where a person is truly needed, waiting for a human check with a ready-made script. The report also records whether each criterion was checked by a tool, by the agent, or by a person. Reports go to `a11y-reports/<date>_<time>/report.html`, and each run is compared with the previous one.

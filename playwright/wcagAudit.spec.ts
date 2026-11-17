@@ -12,6 +12,7 @@ import {
   auditOutDir,
   AuditRecorder,
   checkFocusReturn,
+  checkHoverFocus,
   checkKeyboard,
   checkReflow,
   checkTextSpacing,
@@ -127,6 +128,19 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
         }
         return results;
       });
+      await rec.check('hoverFocus', () =>
+        checkHoverFocus(p, [
+          e.joinVideo,
+          e.unmuteMicButton,
+          e.raiseHandBtn,
+          e.reactionsButton,
+          e.mediaAreaButton,
+          e.leaveMeetingDropdown,
+          e.connectionStatusBtn,
+          e.settingsSidebarButton,
+          e.usersListSidebarButton,
+        ]),
+      );
       await rec.state(p, 'audio-menu', 'Menu de áudio', 'Menu de dispositivos e saída do áudio.', {
         enter: () => mod.waitAndClick(e.audioDropdownMenu),
         leave: () => esc(p),

@@ -23,6 +23,7 @@ Read the arguments:
 | --- | --- | --- |
 | `/a11y-audit` or `full` | `full` | `bigbluebutton-html5/imports/ui` and `bigbluebutton-html5/client` |
 | `/a11y-audit <path>` | `path` | that folder or file |
+| `/a11y-audit diretriz 1.4` (or `guideline`; several allowed, or `principio 2` for all guidelines of a principle) | `guideline` | whole client, every criterion of the given guidelines, decided completely; others are `skip`. This is the mode for closing one work phase. |
 | `/a11y-audit criterio 2.4.7` (or `criterion`) | `criterion` | whole client, only the given criteria; others are `skip` |
 | `/a11y-audit diff [base]` | `diff` | files changed vs `git merge-base HEAD <base>` (default base: the repo main branch, `v4.0.x-develop`) under `bigbluebutton-html5/` |
 | add `--no-runtime` | | skip the runtime layer |
@@ -56,15 +57,15 @@ In `diff` and `path` modes, keep only runtime findings that trace back into the 
 
 ## 4. Guided review
 
-For criteria marked `V` in `references/criteria.md` that are in scope, read the code of the relevant flows from `references/bbb-map.md`. In `full` mode go through the core flows first, then secondary ones as time allows, and list in the summary which flows were reviewed. Every review finding needs file and line evidence; when you could not confirm behavior without running it, use `"confidence": "likely"` and say what to confirm.
+For criteria marked `V` in `references/criteria.md` that are in scope, read the code of the relevant flows from `references/bbb-map.md` until each criterion is decided. In `full` mode start with the core flows; in `guideline` and `criterion` modes go through every flow in `bbb-map.md` for the criteria in scope. List in `meta.reviewedFlows` what you read. Every review finding needs file and line evidence; when you could not confirm behavior without running it, use `"confidence": "likely"` and say what to confirm.
 
-Do not report what you cannot point to. Turn suspicions into screen reader scripts (`references/manual-checks.md`) instead.
+Do not report what you cannot point to. If something can only be confirmed by a person, write a script (`references/manual-checks.md`); if it can be confirmed by reading more code or the runtime data, do that instead.
 
 ## 5. Classify, cover, script
 
 - Classify each finding with `references/rubric.md` (impact, effort, shared, external, key).
-- Fill `coverage` for every criterion that is not failing, following the coverage rule in `references/criteria.md`. Be strict: `pass` only when a layer that can decide it actually ran.
-- Write 3–6 `manualChecks` for the core flows in scope and for findings that need a person to confirm.
+- Fill `coverage` for every in-scope criterion that is not failing, following the coverage rule in `references/criteria.md`: `pass` or `na` with `method` and `how`, `human` only for what truly needs a person (with its script), `not-covered` only when this run could not decide it (with what is missing). The goal is that a guideline can be closed with nothing left open; `build-report.mjs` refuses missing entries.
+- Write `manualChecks`: one for every `human` criterion, plus screen-reader confirmations for the core flows in scope (3–6 in total is typical).
 - Fill `meta.summary`, `meta.reviewedFlows` and `meta.notCovered`: they make the "O que foi testado" tab, which tells the reader exactly what was and was not checked.
 
 ## 6. Build the report
@@ -82,10 +83,11 @@ It validates the input (fix and rerun if it complains), assigns stable IDs, comp
 Keep the chat message short; the report holds the detail:
 
 - verdict and counts per priority, with the change since the last run
+- per guideline: done, how many criteria fail, or what is still open (`human`, `not-covered`)
 - which layers ran, which were skipped and why, which meeting states or flows were not covered
 - the P1 findings as one line each (title, criterion, file)
 - the report path
 
-Offer to turn findings into tasks (one per finding, P1 first). Do not open issues or PRs unless asked.
+Offer to turn findings into tasks, grouped by guideline (one phase per guideline, one task per finding, plus one task per `human` criterion). Do not open issues or PRs unless asked.
 
 **Security:** if a finding could be exploited (for example an authentication bypass found while checking 3.3.8), leave it out of the report and tell the user privately to follow the repository security policy (private advisory, no public issue or PR).

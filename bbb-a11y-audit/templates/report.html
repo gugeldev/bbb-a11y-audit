@@ -227,6 +227,31 @@ button.crit-row:hover { background: var(--soft); }
 .intro { color: var(--muted); margin: 0 12px 32px; max-width: 64ch; }
 footer { margin-top: 96px; color: var(--muted); font-size: 0.8125rem; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 0 12px; }
 
+/* ---------- Por diretriz ---------- */
+.pr-list { display: grid; gap: 64px; }
+.principle { display: grid; gap: 24px; }
+.pr-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 0 12px; }
+.pr-head h2 { font-size: 1.375rem; font-weight: 600; letter-spacing: -0.025em; display: flex; align-items: baseline; gap: 12px; }
+.pr-head h2 small { font-family: var(--mono); font-size: 0.875rem; color: var(--muted); font-weight: 400; }
+.pr-head .n { font-size: 0.8125rem; color: var(--muted); }
+.gl-card { padding: var(--inset); }
+.gl-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 18px 16px 14px; }
+.gl-head h3 { font-size: 1.0625rem; font-weight: 500; letter-spacing: -0.015em; display: flex; align-items: center; gap: 12px; }
+.gl-head .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 0.8125rem; color: var(--muted); }
+.gl-rows { display: grid; gap: 2px; }
+.gl-row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; align-items: center; gap: 6px 14px; padding: 14px 16px; border-radius: var(--r-inner); }
+.gl-row.is-fail { background: var(--soft); }
+.gl-row .num { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); }
+.gl-row .nm { font-size: 0.875rem; min-width: 0; }
+.gl-row .nm .lv { font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); margin-left: 8px; }
+.gl-row .tags { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.gl-row .how { grid-column: 2 / -1; font-size: 0.8125rem; color: var(--muted); }
+.method { font-size: 0.6875rem; font-weight: 500; padding: 3px 9px; border-radius: 999px; color: var(--fg-2); background: var(--soft-2); white-space: nowrap; }
+.gl-findings { grid-column: 2 / -1; list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; }
+.gl-findings button { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; text-align: left; font: inherit; font-size: 0.8125rem; color: var(--fg); background: var(--card); border: 0; border-radius: var(--r-nested); padding: 10px 12px; cursor: pointer; }
+.gl-findings button:hover { box-shadow: 0 0 0 1px var(--control); }
+.gl-findings .ef { color: var(--muted); white-space: nowrap; }
+
 /* ---------- Prints com marcação ---------- */
 .shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; align-items: start; }
 .shot.portrait { max-width: 240px; }
@@ -287,6 +312,10 @@ details.ann > summary:hover { background: var(--soft-2); }
   .stats { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 640px) {
+  .gl-row { grid-template-columns: 44px minmax(0, 1fr); }
+  .gl-row .tags { grid-column: 2 / -1; justify-content: flex-start; }
+  .gl-findings button { grid-template-columns: auto minmax(0, 1fr); }
+  .gl-findings .ef { display: none; }
   .heading { padding: 48px 0 32px; }
   .heading h1 { font-size: 2rem; }
   .summary-body { padding: 24px; }
@@ -342,19 +371,19 @@ details.ann > summary:hover { background: var(--soft-2); }
   </div>
 
   <main>
-    <section role="tabpanel" id="panel-achados" aria-labelledby="tab-achados">
+    <section role="tabpanel" id="panel-diretrizes" aria-labelledby="tab-diretrizes">
+      <p class="intro">Cada diretriz é uma fase de trabalho. Ela está concluída quando todos os seus critérios passaram ou não se aplicam. Cada critério diz quem o verificou: a ferramenta, o agente (lendo código e prints) ou uma pessoa.</p>
+      <div class="pr-list" id="guidelines"></div>
+    </section>
+    <section role="tabpanel" id="panel-achados" aria-labelledby="tab-achados" hidden>
       <p class="status" id="status" role="status" aria-live="polite"></p>
       <div class="groups" id="groups"></div>
     </section>
     <section role="tabpanel" id="panel-cobertura" aria-labelledby="tab-cobertura" hidden>
       <div class="cov" id="coverage"></div>
     </section>
-    <section role="tabpanel" id="panel-criterios" aria-labelledby="tab-criterios" hidden>
-      <p class="intro">Os 55 critérios de nível A e AA. "Manual" significa que nenhuma ferramenta decide sozinha e uma pessoa precisa conferir.</p>
-      <div class="principles" id="principles"></div>
-    </section>
     <section role="tabpanel" id="panel-leitor" aria-labelledby="tab-leitor" hidden>
-      <p class="intro">Roteiros para uma pessoa executar com o leitor de tela ligado. A ferramenta automática não substitui ouvir.</p>
+      <p class="intro">Roteiros para uma pessoa executar: critérios que só uma pessoa consegue decidir e confirmações com leitor de tela de verdade.</p>
       <div class="checks" id="checks"></div>
     </section>
     <section role="tabpanel" id="panel-corrigidos" aria-labelledby="tab-corrigidos" hidden>
@@ -410,8 +439,14 @@ __DATA__
   var IMPACT = { blocker: 'Bloqueante', high: 'Alto', medium: 'Médio', low: 'Baixo' };
   var EFFORT = { S: 'Pequeno', M: 'Médio', L: 'Grande' };
   var SOURCE = { static: 'Análise de código', runtime: 'Teste automático', review: 'Revisão guiada' };
-  var COV = { fail: ['Falha', 't-red'], manual: ['Manual', 't-amber'], pass: ['Passou', 't-green'], na: ['N/A', 't-gray'], skip: ['Não avaliado', 't-gray'] };
-  var COV_DOT = { fail: 'var(--red-dot)', manual: 'var(--amber-dot)', pass: 'var(--green-dot)', na: 'var(--gray-dot)', skip: 'var(--soft-2)' };
+  var COV = { fail: ['Falha', 't-red'], human: ['Precisa de pessoa', 't-amber'], 'not-covered': ['Não coberto', 't-orange'], pass: ['Passou', 't-green'], na: ['Não se aplica', 't-gray'], skip: ['Fora do escopo', 't-gray'] };
+  var COV_DOT = { fail: 'var(--red-dot)', human: 'var(--amber-dot)', 'not-covered': 'var(--orange-dot)', pass: 'var(--green-dot)', na: 'var(--gray-dot)', skip: 'var(--soft-2)' };
+  var METHOD = { tool: 'Ferramenta', agent: 'Agente', human: 'Pessoa' };
+  var GUIDE = {
+    '1.1': 'Alternativas em texto', '1.2': 'Mídia baseada em tempo', '1.3': 'Adaptável', '1.4': 'Distinguível',
+    '2.1': 'Acessível por teclado', '2.2': 'Tempo suficiente', '2.3': 'Convulsões e reações físicas', '2.4': 'Navegável', '2.5': 'Modalidades de entrada',
+    '3.1': 'Legível', '3.2': 'Previsível', '3.3': 'Assistência de entrada', '4.1': 'Compatível'
+  };
   function critInfo(f) { return CRIT[f.criterion] || { level: f.standard || 'EN', name: f.criterionName || '' }; }
   var PRIO = {
     1: { name: 'Fazer agora', dot: 'var(--red-dot)' },
@@ -431,9 +466,18 @@ __DATA__
   F.sort(function (a, b) { return a.priority - b.priority || ord[a.impact] - ord[b.impact]; });
 
   var cov = {};
-  CRITERIA.forEach(function (c) { cov[c[0]] = D.coverage[c[0]] || 'manual'; });
-  F.forEach(function (f) { if (CRIT[f.criterion]) cov[f.criterion] = 'fail'; });
-  var covCount = { fail: 0, manual: 0, pass: 0, na: 0, skip: 0 };
+  var covInfo = {};
+  CRITERIA.forEach(function (c) {
+    var raw = (D.coverage || {})[c[0]];
+    var o = typeof raw === 'string' ? { status: raw === 'manual' ? 'not-covered' : raw } : (raw || { status: 'not-covered', how: 'Sem informação nesta execução.' });
+    if (!COV[o.status]) o = { status: 'not-covered', how: o.how || '' };
+    covInfo[c[0]] = o;
+    cov[c[0]] = o.status;
+  });
+  F.forEach(function (f) {
+    if (CRIT[f.criterion]) { cov[f.criterion] = 'fail'; covInfo[f.criterion] = Object.assign({}, covInfo[f.criterion], { status: 'fail' }); }
+  });
+  var covCount = { fail: 0, human: 0, 'not-covered': 0, pass: 0, na: 0, skip: 0 };
   CRITERIA.forEach(function (c) { covCount[cov[c[0]]]++; });
 
   // Topo
@@ -449,10 +493,15 @@ __DATA__
 
   // Resumo
   if (D.meta.example) $('example').hidden = false;
-  $('verdict').textContent = covCount.fail ? 'Não conforme' : (covCount.manual || covCount.skip ? 'Sem falhas encontradas' : 'Conforme');
-  $('verdict-sub').textContent = covCount.fail
-    ? covCount.fail + ' de ' + CRITERIA.length + ' critérios falham, com ' + F.length + ' achados no total.'
-    : (covCount.manual + covCount.skip) + ' critérios ainda dependem de verificação manual ou não foram avaliados.';
+  $('verdict').textContent = covCount.fail ? 'Não conforme'
+    : covCount['not-covered'] ? 'Incompleto'
+    : covCount.human ? 'Sem falhas, aguardando teste humano'
+    : covCount.skip ? 'Sem falhas no escopo' : 'Conforme';
+  var subBits = [];
+  if (covCount.fail) subBits.push(covCount.fail + ' de ' + (CRITERIA.length - covCount.skip) + ' critérios falham, com ' + F.length + ' achados');
+  if (covCount['not-covered']) subBits.push(covCount['not-covered'] + ' ainda não cobertos');
+  if (covCount.human) subBits.push(covCount.human + ' dependem de uma pessoa');
+  $('verdict-sub').textContent = subBits.length ? subBits.join(', ') + '.' : 'Todos os critérios do escopo passaram ou não se aplicam.';
   var nNew = F.filter(function (f) { return f.status === 'new'; }).length;
   var nReg = F.filter(function (f) { return f.status === 'regressed'; }).length;
   $('changes').innerHTML = D.meta.previousRun
@@ -460,10 +509,10 @@ __DATA__
       (nReg ? '<span class="pill t-red">' + nReg + ' regress' + (nReg === 1 ? 'ão' : 'ões') + '</span>' : '') +
       '<span class="pill t-green">' + D.fixed.length + ' corrigidos</span>'
     : '<span class="pill t-gray">Primeira execução</span>';
-  var covOrder = ['fail', 'manual', 'pass', 'na', 'skip'];
-  $('bar').innerHTML = covOrder.map(function (k) { return covCount[k] ? '<i style="flex:' + covCount[k] + ';background:' + COV_DOT[k] + '"></i>' : ''; }).join('');
-  var covLabel = { fail: 'falham', manual: 'precisam de teste manual', pass: 'passaram', na: 'não se aplicam', skip: 'não avaliados' };
-  $('legend').innerHTML = covOrder.filter(function (k) { return covCount[k] || k !== 'skip'; }).map(function (k) { return '<span><i class="sq" style="background:' + COV_DOT[k] + '" aria-hidden="true"></i><b>' + covCount[k] + '</b> ' + covLabel[k] + '</span>'; }).join('');
+  var covOrder = ['fail', 'human', 'not-covered', 'pass', 'na', 'skip'];
+  $('bar').innerHTML = covOrder.filter(function (k) { return k !== 'skip'; }).map(function (k) { return covCount[k] ? '<i style="flex:' + covCount[k] + ';background:' + COV_DOT[k] + '"></i>' : ''; }).join('');
+  var covLabel = { fail: 'falham', human: 'precisam de pessoa', 'not-covered': 'não cobertos', pass: 'passaram', na: 'não se aplicam', skip: 'fora do escopo' };
+  $('legend').innerHTML = covOrder.filter(function (k) { return covCount[k] || k === 'fail' || k === 'pass'; }).map(function (k) { return '<span><i class="sq" style="background:' + COV_DOT[k] + '" aria-hidden="true"></i><b>' + covCount[k] + '</b> ' + covLabel[k] + '</span>'; }).join('');
   var counts = { 1: 0, 2: 0, 3: 0, 4: 0 };
   F.forEach(function (f) { counts[f.priority]++; });
   $('stats').innerHTML = [1, 2, 3, 4].map(function (p) {
@@ -471,7 +520,7 @@ __DATA__
   }).join('');
 
   // Abas
-  var TABS = [['achados', 'Achados', F.length, 'list-checks'], ['cobertura', 'O que foi testado', (D.scenarios || []).length + ' cenários', 'eye'], ['criterios', 'Critérios', CRITERIA.length, 'squares-four'], ['leitor', 'Leitor de tela', D.manualChecks.length, 'headphones'], ['corrigidos', 'Corrigidos', D.fixed.length, 'check-circle']];
+  var TABS = [['diretrizes', 'Por diretriz', Object.keys(GUIDE).length], ['achados', 'Por prioridade', F.length], ['cobertura', 'O que foi testado', (D.scenarios || []).length + ' cenários'], ['leitor', 'Teste humano', D.manualChecks.length], ['corrigidos', 'Corrigidos', D.fixed.length]];
   $('tabs').innerHTML = TABS.map(function (t, i) {
     return '<button role="tab" id="tab-' + t[0] + '" aria-controls="panel-' + t[0] + '" aria-selected="' + (i === 0) + '" tabindex="' + (i ? -1 : 0) + '">' + t[1] + '<span class="n">' + t[2] + '</span></button>';
   }).join('');
@@ -639,23 +688,59 @@ __DATA__
     $('coverage').innerHTML = html;
   })();
 
-  // Critérios
-  $('principles').innerHTML = Object.keys(PRINCIPLES).map(function (k) {
-    var list = CRITERIA.filter(function (c) { return c[0].split('.')[0] === k; });
-    var nf = list.filter(function (c) { return cov[c[0]] === 'fail'; }).length;
-    return '<section aria-labelledby="pr' + k + '"><div class="group-head"><h2 id="pr' + k + '"><small>' + k + '</small>' + PRINCIPLES[k][0] + '</h2><span class="n">' + (nf ? nf + ' com falha' : 'sem falhas') + '</span></div><div class="card crit-list">' +
-      list.map(function (c) {
-        var s = COV[cov[c[0]]];
-        var inner = '<span class="num">' + c[0] + '</span><span class="nm">' + esc(c[2]) + '<span class="lv">' + c[1] + '</span></span><span class="pill plain ' + s[1] + '">' + s[0] + '</span>';
-        return cov[c[0]] === 'fail'
-          ? '<button type="button" class="crit-row" data-crit="' + c[0] + '" aria-label="' + c[0] + ' ' + esc(c[2]) + ', falha. Ver achados">' + inner + '</button>'
-          : '<div class="crit-row">' + inner + '</div>';
-      }).join('') + '</div></section>';
+  // Por diretriz
+  function guidelineStatus(list) {
+    var n = { fail: 0, human: 0, 'not-covered': 0, pass: 0, na: 0, skip: 0 };
+    list.forEach(function (c) { n[cov[c[0]]]++; });
+    if (n.skip === list.length) return ['Fora do escopo', 't-gray', n];
+    if (n.fail) return [n.fail + (n.fail === 1 ? ' critério com falha' : ' critérios com falha'), 't-red', n];
+    if (n['not-covered']) return ['Incompleta', 't-orange', n];
+    if (n.human) return ['Aguardando pessoa', 't-amber', n];
+    return ['Concluída', 't-green', n];
+  }
+  $('guidelines').innerHTML = Object.keys(PRINCIPLES).map(function (k) {
+    var gls = Object.keys(GUIDE).filter(function (g) { return g.split('.')[0] === k; });
+    var stats = gls.map(function (g) { return guidelineStatus(CRITERIA.filter(function (c) { return c[0].indexOf(g + '.') === 0; }))[0]; });
+    var inScopeN = stats.filter(function (s) { return s !== 'Fora do escopo'; }).length;
+    var done = stats.filter(function (s) { return s === 'Concluída'; }).length;
+    return '<section class="principle" aria-labelledby="pr' + k + '"><div class="pr-head"><h2 id="pr' + k + '"><small>' + k + '</small>' + PRINCIPLES[k][0] + '</h2><span class="n">' + (inScopeN ? done + ' de ' + inScopeN + ' diretrizes concluídas' : 'fora do escopo') + '</span></div>' +
+      gls.map(function (g) {
+        var list = CRITERIA.filter(function (c) { return c[0].indexOf(g + '.') === 0; });
+        var st = guidelineStatus(list);
+        var gF = F.filter(function (f) { return f.criterion.indexOf(g + '.') === 0; });
+        return '<div class="card gl-card"><div class="gl-head"><h3><span class="chip">' + g + '</span>' + GUIDE[g] + '</h3><span class="meta">' +
+          (gF.length ? gF.length + (gF.length === 1 ? ' achado' : ' achados') : '') + '<span class="pill plain ' + st[1] + '">' + st[0] + '</span></span></div>' +
+          (st[0] === 'Fora do escopo' ? '</div>' : '<div class="gl-rows">' +
+          list.map(function (c) {
+            var s = cov[c[0]];
+            var info = covInfo[c[0]] || {};
+            var cf = F.filter(function (f) { return f.criterion === c[0]; });
+            var method = s === 'fail'
+              ? (cf.some(function (f) { return f.source !== 'review'; }) ? 'tool' : 'agent')
+              : info.method;
+            var how = s === 'fail' ? '' : (info.how || '');
+            return '<div class="gl-row' + (s === 'fail' ? ' is-fail' : '') + '"><span class="num">' + c[0] + '</span><span class="nm">' + esc(c[2]) + '<span class="lv">' + c[1] + '</span></span>' +
+              '<span class="tags">' + (method && s !== 'skip' ? '<span class="method">' + METHOD[method] + '</span>' : '') + '<span class="pill plain ' + COV[s][1] + '">' + COV[s][0] + '</span></span>' +
+              (how ? '<span class="how">' + esc(how) + (s === 'human' && info.check ? ' Roteiro: ' + esc(info.check) + '.' : '') + '</span>' : '') +
+              (cf.length ? '<ul class="gl-findings">' + cf.map(function (f) {
+                return '<li><button type="button" data-goto="' + f.id + '"><span class="prio p' + f.priority + '">P' + f.priority + '</span><span>' + esc(f.title) + '</span><span class="ef">' + IMPACT[f.impact] + ' · esforço ' + EFFORT[f.effort].toLowerCase() + '</span></button></li>';
+              }).join('') + '</ul>' : '') +
+              '</div>';
+          }).join('') + '</div></div>');
+      }).join('') + '</section>';
   }).join('');
-  $('principles').addEventListener('click', function (e) {
-    var b = e.target.closest('[data-crit]');
+  $('guidelines').addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-goto]');
     if (!b) return;
-    $('q').value = b.dataset.crit; renderFindings(); selectTab('achados', true);
+    $('q').value = '';
+    renderFindings();
+    selectTab('achados');
+    var det = $(b.dataset.goto);
+    if (det) {
+      det.open = true;
+      det.scrollIntoView({ block: 'start' });
+      det.querySelector('summary').focus({ preventScroll: true });
+    }
   });
 
   // Leitor de tela
@@ -678,6 +763,7 @@ __DATA__
   $('foot-l').textContent = 'Camadas: ' + (D.meta.layers || []).map(function (l) { return l.name + (l.ran ? '' : ' (não executada' + (l.reason ? ': ' + l.reason : '') + ')'); }).join(' · ');
   $('foot-r').textContent = prev ? 'Comparado com ' + prev : 'Gerado por /a11y-audit';
   renderFindings();
+  selectTab('diretrizes');
 })();
 </script>
 </body>

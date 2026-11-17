@@ -85,6 +85,13 @@ const PATTERNS = [
     hint: 'Viewport meta that blocks pinch zoom (axe: meta-viewport).',
   },
   {
+    id: 'single-key-shortcut',
+    criterion: '2.1.4',
+    kinds: ['code'],
+    re: /\.(?:key|code|keyCode|which)\s*[!=]==?\s*(?:['"](?:Key|Digit)?[A-Za-z0-9?/]['"]|KEYS\.[A-Za-z0-9]\b)/g,
+    hint: 'Keyboard handler reacting to a single character key. Fine if it requires a modifier, can be turned off or remapped, or only fires while the component has focus.',
+  },
+  {
     id: 'forced-colors-none',
     criterion: '9.7',
     standard: 'EN',

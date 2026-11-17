@@ -112,7 +112,11 @@ Write `title`, `affects`, `fix` and `verify` in the language of the person runni
       "shots": []
     }
   ],
-  "coverage": { "1.1.1": "pass", "1.2.1": "na", "2.1.1": "manual" },
+  "coverage": {
+    "1.4.3": { "status": "pass", "method": "tool", "how": "axe color-contrast em 57 telas, tema claro e escuro" },
+    "1.2.1": { "status": "na", "method": "agent", "how": "O cliente não reproduz mídia gravada; gravações ficam no bbb-playback" },
+    "1.2.4": { "status": "human", "method": "human", "how": "Legendas ao vivo existem e abrem pelo teclado; precisão e atraso pedem uma pessoa", "check": "Legendas ao vivo" }
+  },
   "discarded": [
     { "source": "static:outline-none", "file": "…/styles.ts", "line": 47, "reason": "&:focus-visible adds a box-shadow ring in the same rule" }
   ],
@@ -127,7 +131,8 @@ Field rules:
 - `criterion`: WCAG 2.2 A/AA number. For EN 301 549 clauses outside WCAG (9.6, 9.7) set `"standard": "EN"`, `"criterionName": "Preferências do usuário"`.
 - `source`: `static`, `runtime` or `review` (the layer that found it).
 - `location.file`: repo-relative path of the place to fix. For runtime findings, trace the selector back to the source file; if you cannot, use the closest component directory and say so in `evidence`.
-- `coverage`: one entry per criterion that is **not** failing: `pass`, `manual`, `na` or `skip` (not evaluated in this mode). Failing criteria are derived from findings. Rules for choosing are in `criteria.md`.
+- `coverage`: one entry per in-scope criterion that is **not** failing, as `{ status, method, how, check? }` with status `pass`, `na`, `human`, `not-covered` (or `skip` outside the scope; added automatically when `meta.criteria` or `meta.guidelines` is set). Failing criteria are derived from findings. Rules are in `criteria.md` ("Coverage rule").
+- `meta.guidelines` (guideline mode) and `meta.criteria` (criterion mode): the requested scope, e.g. `["1.4"]` or `["2.4.7"]`.
 - `discarded`: every candidate you rejected (fields: `source`, `file` and `line` when it has them, `state` for runtime candidates, `reason`): static pattern, eslint message, axe `incomplete`, custom runtime check), with the reason. Use `source` values like `static:outline-none`, `eslint:control-has-associated-label`, `axe:aria-valid-attr-value`, `runtime:keyboard.obscured`. This keeps triage honest and lets the next run skip known false positives.
 - `shots` (per finding, runtime findings especially): where the problem shows on screen. Each entry is `{ "state": "<scenario>/<state>", "rule": "<axe rule id>" }` (marks every node of that rule in that state; add `"target": "<substring of the axe target>"` to narrow it), or `{ "state": "…", "dataTest": "<data-test value>" }` (marks that element; also accepts a list), or explicit `"boxes": [{ "x", "y", "w", "h" }]` in CSS pixels of that state's viewport, plus an optional `"caption"`. `build-report.mjs` turns them into numbered markers on the screenshot. Add at least one shot to every runtime finding and to static or review findings whose element is visible in some state (find it in that state's `elements` map in `raw/runtime/<scenario>.json`). Leave `shots` empty when the problem has no box on screen (a `<meta>` tag, the `lang` attribute, an announcement that never happens). Example: `{ "state": "moderator/meeting", "rule": "nested-interactive", "caption": "Botões aninhados na barra de ações" }`.
 - `meta.summary`, `meta.reviewedFlows` and `meta.notCovered` fill the "O que foi testado" tab. List every flow you read in the guided review, and every flow, state or criterion area that nothing covered, with the reason (state failed to open, needs a device, out of scope).
