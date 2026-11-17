@@ -54,6 +54,15 @@ In `bigbluebutton-tests/playwright/accessibility/`:
 - `nonTextContrast.spec.ts` + `nonTextContrast.ts`: 1.4.11 checker. Tagged `@need-update` because 4.0 border colors fail 3:1 (`colorBorder #B8C9D8`, `colorBlueLightest #E4ECF2`, `defaultBorder #B0BDC9`). Treat that as a known, confirmed finding.
 - `wcagAudit.spec.ts`: the runtime layer of this skill (not in CI).
 
+## Setting up the runtime layer
+
+The runtime layer lives in the skill (`runtime/wcagAudit.spec.ts` and `runtime/wcagAuditRecorder.ts`) and runs inside the BigBlueButton Playwright suite, because it uses that suite's helpers (`core/page`, `user/multiusers`, `core/elements`, polling and screenshare utils).
+
+1. Find the suite: `bigbluebutton-tests/playwright/` at the repo root (it has `playwright.config.ts` and `core/`). If it does not exist, the runtime layer cannot run; record why.
+2. Compare `$SKILL/runtime/*.ts` with `bigbluebutton-tests/playwright/accessibility/` (`cmp`). If they are missing or differ, copy the skill's files there (the skill's copy is the source of truth).
+3. If `@axe-core/playwright` is not in that folder's `package.json`, run `npm install --save-exact @axe-core/playwright@4.14.0` there. If `node_modules` is missing, run `npm ci`. If no Chromium is installed for Playwright, run `npx playwright install chromium` (on Linux distributions Playwright does not recognize, prefix it with `PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64`).
+4. Report in the final message what you installed or updated.
+
 ## Running the runtime layer
 
 Needs a BigBlueButton server. In `bigbluebutton-tests/playwright/`:
