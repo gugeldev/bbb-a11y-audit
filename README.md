@@ -12,10 +12,18 @@ Each finding comes with the criterion, evidence, a screenshot with the problem m
 
 ## Install
 
-1. Copy `bbb-a11y-audit/` into your agent's skills folder. It uses the standard `SKILL.md` format.
-2. Copy `playwright/*.ts` into `bigbluebutton-tests/playwright/accessibility/`.
-3. Run `npm install @axe-core/playwright` in `bigbluebutton-tests/playwright`.
-4. Set `BBB_URL` and `BBB_SECRET` in that folder's `.env`. This is optional: without a server, the runtime layer is skipped.
+Paste this into your coding agent, from your BigBlueButton checkout:
+
+```text
+Install the agent skill from https://github.com/gugeldev/bbb-a11y-audit into this project:
+copy its `bbb-a11y-audit/` folder into the skills folder you load project skills from
+(for Claude Code that is `.claude/skills/`). Don't run it yet; just confirm it is installed
+and show me how to run it for one guideline.
+```
+
+Or by hand: copy `bbb-a11y-audit/` into your agent's skills folder. It uses the standard `SKILL.md` format.
+
+The live-meeting layer sets itself up on the first run: it copies its Playwright files into `bigbluebutton-tests/playwright/accessibility/` and installs `@axe-core/playwright`. It needs `BBB_URL` and `BBB_SECRET` for a test server in `bigbluebutton-tests/playwright/.env`. Without them, that layer is skipped and the rest still runs.
 
 ## Use
 
