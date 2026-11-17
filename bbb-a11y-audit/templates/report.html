@@ -720,9 +720,9 @@ __DATA__
             var info = covInfo[c[0]] || {};
             var cf = F.filter(function (f) { return f.criterion === c[0]; });
             var method = s === 'fail'
-              ? (cf.some(function (f) { return f.source !== 'review'; }) ? 'tool' : 'agent')
+              ? (info.method || (cf.some(function (f) { return f.source !== 'review'; }) ? 'tool' : 'agent'))
               : info.method;
-            var how = s === 'fail' ? '' : (info.how || '');
+            var how = info.how || '';
             return '<div class="gl-row' + (s === 'fail' ? ' is-fail' : '') + '"><span class="num">' + c[0] + '</span><span class="nm">' + esc(c[2]) + '<span class="lv">' + c[1] + '</span></span>' +
               '<span class="tags">' + (method && s !== 'skip' ? '<span class="method">' + METHOD[method] + '</span>' : '') + '<span class="pill plain ' + COV[s][1] + '">' + COV[s][0] + '</span></span>' +
               (how ? '<span class="how">' + esc(how) + (s === 'human' && info.check ? ' Roteiro: ' + esc(info.check) + '.' : '') + '</span>' : '') +

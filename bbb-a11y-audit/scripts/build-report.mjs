@@ -172,7 +172,9 @@ const manualFlows = new Set((input.manualChecks || []).map((m) => m.flow));
 const coverage = {};
 for (const c of WCAG) {
   if (failing.has(c)) {
-    coverage[c] = { status: 'fail' };
+    // Failing comes from findings; method/how may still be given to say how it was checked.
+    const o = (input.coverage || {})[c];
+    coverage[c] = { status: 'fail', method: (o && o.method) || '', how: (o && o.how) || '' };
   } else if (!inCriteriaScope(c)) {
     coverage[c] = { status: 'skip' };
   } else {

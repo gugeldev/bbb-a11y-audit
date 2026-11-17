@@ -71,7 +71,8 @@ Do not report what you cannot point to. If something can only be confirmed by a 
 ## 5. Classify, cover, script
 
 - Classify each finding with `references/rubric.md` (impact, effort, shared, external, key).
-- Fill `coverage` for every in-scope criterion that is not failing, following the coverage rule in `references/criteria.md`: `pass` or `na` with `method` and `how`, `human` only for what truly needs a person (with its script), `not-covered` only when this run could not decide it (with what is missing). The goal is that a guideline can be closed with nothing left open; `build-report.mjs` refuses missing entries.
+- Keep ids stable across runs: read the `findings.json` of the previous run of this topic (or the latest full run) and, for each problem that is still there, reuse its `key`, or set its `id` explicitly. Otherwise it shows up as "new" plus a false "fixed".
+- Fill `coverage` for every in-scope criterion that is not failing (and add `method`/`how` to failing ones too), following the coverage rule in `references/criteria.md`: `pass` or `na` with `method` and `how`, `human` only for what truly needs a person (with its script), `not-covered` only when this run could not decide it (with what is missing). The goal is that a guideline can be closed with nothing left open; `build-report.mjs` refuses missing entries.
 - Write `manualChecks`: one for every `human` criterion, plus screen-reader confirmations for the core flows in scope (3–6 in total is typical).
 - Fill `meta.summary`, `meta.reviewedFlows` and `meta.notCovered`: they make the "O que foi testado" tab, which tells the reader exactly what was and was not checked.
 
