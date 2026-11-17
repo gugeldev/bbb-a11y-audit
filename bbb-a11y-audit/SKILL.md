@@ -5,12 +5,12 @@ description: Audit the BigBlueButton HTML5 client against WCAG 2.2 level A and A
 
 # Accessibility audit (WCAG 2.2 AA)
 
-Produce an honest, prioritized list of accessibility problems that can be turned into small tasks. The audit is **read-only**: do not change application code while auditing, even for obvious fixes. Fixing is a separate request.
+Produce an honest list of accessibility problems for the chosen topic that can be turned into small tasks and fixed within the phase. The audit is **read-only**: do not change application code while auditing, even for obvious fixes. Fixing is a separate request.
 
 Skill directory: the folder that contains this SKILL.md (below: `$SKILL`; in this repository usually `.claude/skills/bbb-a11y-audit`). References, read when the step needs them:
 
 - `references/criteria.md`: the 55 criteria, which layer can evaluate each, BBB hotspots, coverage rules
-- `references/rubric.md`: impact, effort, priority, grouping, stable keys, the `findings.input.json` schema
+- `references/rubric.md`: impact, effort, this phase or backlog, grouping, stable keys, the `findings.input.json` schema
 - `references/static-patterns.md`: static tools, how to triage each pattern, eslint and axe mappings
 - `references/bbb-map.md`: flows, code locations, shared components, how to run the runtime layer
 - `references/manual-checks.md`: screen reader scripts
@@ -84,16 +84,16 @@ Write `<run>/raw/findings.input.json` (schema in `references/rubric.md`), then:
 node $SKILL/scripts/build-report.mjs <run>
 ```
 
-It validates the input (fix and rerun if it complains), assigns stable IDs, computes priority and the EN 301 549 clause, compares with the previous run (new, persisting, regressed, fixed, not re-checked) and writes `<run>/findings.json` and `<run>/report.html`. Open the report for the user (`xdg-open` on Linux, `open` on macOS).
+It validates the input (fix and rerun if it complains), assigns stable IDs, puts each finding in this phase or backlog, adds the EN 301 549 clause, compares with the previous run (new, persisting, regressed, fixed, not re-checked) and writes `<run>/findings.json` and `<run>/report.html`. Open the report for the user (`xdg-open` on Linux, `open` on macOS).
 
 ## 7. Tell the user
 
 Keep the chat message short; the report holds the detail:
 
-- verdict and counts per priority, with the change since the last run
+- verdict, how many findings are for this phase and how many went to backlog (with why), and the change since the last run
 - per guideline: done, how many criteria fail, or what is still open (`human`, `not-covered`)
 - which layers ran, which were skipped and why, which meeting states or flows were not covered
-- the P1 findings as one line each (title, criterion, file)
+- the blocker and high-impact findings as one line each (title, criterion, file)
 - the report path
 
 Offer to turn findings into tasks, grouped by guideline (one phase per guideline, one task per finding, plus one task per `human` criterion). Do not open issues or PRs unless asked.

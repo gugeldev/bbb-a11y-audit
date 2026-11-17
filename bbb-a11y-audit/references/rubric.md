@@ -27,18 +27,14 @@ Raise impact one level when the problem sits in a **shared component** (one fix 
 
 Set `"external": true` when the fix probably belongs in a dependency (`@bigbluebutton/bbb-ui-components-react`, tldraw, BlockNote, a video player). Keep the effort as it would be in that dependency and say where the fix goes in `fix`.
 
-## Priority
+## This phase or backlog
 
-`build-report.mjs` computes it; do not set it yourself.
+There are no priority levels. A topic is fixed completely in its phase, so every finding goes to **this phase** by default. Only what cannot be done inside the phase goes to **backlog**, always with a reason:
 
-| | S | M | L |
-| --- | --- | --- | --- |
-| blocker | P1 | P1 | P2 |
-| high | P1 | P2 | P3 |
-| medium | P2 | P3 | P3 |
-| low | P3 | P4 | P4 |
+- the fix belongs to an external library (`external: true`), or
+- it needs work that cannot fit a phase (`effort: "L"`: a new color palette with design, a new keyboard model for the whiteboard).
 
-P1 = do now, P2 = next cycle, P3 = plan, P4 = backlog.
+`build-report.mjs` applies that default. Override it per finding with `"backlog": false` (it is large but the team will do it now) or `"backlog": true` plus `"backlogReason"`. Impact and effort stay on every finding as information and set the order inside each group (most serious first).
 
 ## Confidence
 

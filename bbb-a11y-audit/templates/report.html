@@ -116,7 +116,7 @@ h1, h2, h3, p { margin: 0; }
 .legend b { color: var(--fg); font-weight: 500; font-variant-numeric: tabular-nums; }
 .sq { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--inset); padding: 0 var(--inset) var(--inset); }
+.stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--inset); padding: 0 var(--inset) var(--inset); }
 .stat { padding: 22px 24px 24px; border-radius: var(--r-inner); background: var(--soft); display: grid; gap: 14px; }
 .stat .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .stat .lbl { font-size: 0.8125rem; color: var(--muted); }
@@ -157,6 +157,7 @@ h1, h2, h3, p { margin: 0; }
 .prio.p2 { color: var(--orange); background: var(--orange-bg); }
 .prio.p3 { color: var(--amber); background: var(--amber-bg); }
 .prio.p4 { color: var(--gray); background: var(--gray-bg); }
+.group-head h2 small.hint { font-family: var(--font); font-size: 0.8125rem; }
 .group-head .n { font-size: 0.8125rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .rows { list-style: none; margin: 0; padding: var(--inset); display: grid; gap: 4px; }
@@ -450,22 +451,27 @@ __DATA__
     '3.1': 'Legível', '3.2': 'Previsível', '3.3': 'Assistência de entrada', '4.1': 'Compatível'
   };
   function critInfo(f) { return CRIT[f.criterion] || { level: f.standard || 'EN', name: f.criterionName || '' }; }
-  var PRIO = {
-    1: { name: 'Fazer agora', dot: 'var(--red-dot)' },
-    2: { name: 'Próximo ciclo', dot: 'var(--orange-dot)' },
-    3: { name: 'Planejar', dot: 'var(--amber-dot)' },
-    4: { name: 'Backlog', dot: 'var(--gray-dot)' }
+  var BUCKET = {
+    now: { name: 'Corrigir nesta fase', dot: 'var(--red-dot)', hint: 'Tudo que dá para resolver agora.' },
+    backlog: { name: 'Backlog', dot: 'var(--gray-dot)', hint: 'Só o que não cabe na fase, com o motivo.' }
   };
-  var MATRIX = { blocker: { S: 1, M: 1, L: 2 }, high: { S: 1, M: 2, L: 3 }, medium: { S: 2, M: 3, L: 3 }, low: { S: 3, M: 4, L: 4 } };
+  var IMPACT_TONE = { blocker: 't-red', high: 't-orange', medium: 't-amber', low: 't-gray' };
+  function impactTag(f) { return '<span class="pill plain ' + IMPACT_TONE[f.impact] + '">' + IMPACT[f.impact] + '</span>'; }
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function $(id) { return document.getElementById(id); }
   function shortFile(f) { var p = f.split('/'); return p.length > 3 ? p.slice(-3).join('/') : f; }
   function fileLine(f) { return f.location.file + (f.location.line ? ':' + f.location.line : ''); }
 
-  var F = D.findings.map(function (f) { f.priority = MATRIX[f.impact][f.effort]; return f; });
+  var F = D.findings.map(function (f) {
+    if (!f.bucket) f.bucket = (f.effort === 'L' || f.external) ? 'backlog' : 'now';
+    return f;
+  });
   var ord = { blocker: 0, high: 1, medium: 2, low: 3 };
-  F.sort(function (a, b) { return a.priority - b.priority || ord[a.impact] - ord[b.impact]; });
+  var eff = { S: 0, M: 1, L: 2 };
+  F.sort(function (a, b) {
+    return (a.bucket === b.bucket ? 0 : (a.bucket === 'now' ? -1 : 1)) || ord[a.impact] - ord[b.impact] || eff[a.effort] - eff[b.effort];
+  });
 
   var cov = {};
   var covInfo = {};
@@ -515,14 +521,13 @@ __DATA__
   $('bar').innerHTML = covOrder.filter(function (k) { return k !== 'skip'; }).map(function (k) { return covCount[k] ? '<i style="flex:' + covCount[k] + ';background:' + COV_DOT[k] + '"></i>' : ''; }).join('');
   var covLabel = { fail: 'falham', human: 'precisam de pessoa', 'not-covered': 'não cobertos', pass: 'passaram', na: 'não se aplicam', skip: 'fora do escopo' };
   $('legend').innerHTML = covOrder.filter(function (k) { return (covCount[k] || k === 'fail' || k === 'pass') && !(k === 'skip' && TOPIC); }).map(function (k) { return '<span><i class="sq" style="background:' + COV_DOT[k] + '" aria-hidden="true"></i><b>' + covCount[k] + '</b> ' + covLabel[k] + '</span>'; }).join('');
-  var counts = { 1: 0, 2: 0, 3: 0, 4: 0 };
-  F.forEach(function (f) { counts[f.priority]++; });
-  $('stats').innerHTML = [1, 2, 3, 4].map(function (p) {
-    return '<div class="stat"><span class="lbl"><i class="sq" style="background:' + PRIO[p].dot + '" aria-hidden="true"></i><b>P' + p + '</b>' + PRIO[p].name + '</span><span class="val">' + counts[p] + '</span></div>';
+  $('stats').innerHTML = ['now', 'backlog'].map(function (b) {
+    var n = F.filter(function (f) { return f.bucket === b; }).length;
+    return '<div class="stat"><span class="lbl"><i class="sq" style="background:' + BUCKET[b].dot + '" aria-hidden="true"></i><b>' + BUCKET[b].name + '</b></span><span class="val">' + n + '</span></div>';
   }).join('');
 
   // Abas
-  var TABS = [['diretrizes', 'Por diretriz', Object.keys(GUIDE).filter(glInScope).length], ['achados', 'Por prioridade', F.length], ['cobertura', 'O que foi testado', (D.scenarios || []).length + ' cenários'], ['leitor', 'Teste humano', D.manualChecks.length], ['corrigidos', 'Corrigidos', D.fixed.length]];
+  var TABS = [['diretrizes', 'Por diretriz', Object.keys(GUIDE).filter(glInScope).length], ['achados', 'Lista de achados', F.length], ['cobertura', 'O que foi testado', (D.scenarios || []).length + ' cenários'], ['leitor', 'Teste humano', D.manualChecks.length], ['corrigidos', 'Corrigidos', D.fixed.length]];
   $('tabs').innerHTML = TABS.map(function (t, i) {
     return '<button role="tab" id="tab-' + t[0] + '" aria-controls="panel-' + t[0] + '" aria-selected="' + (i === 0) + '" tabindex="' + (i ? -1 : 0) + '">' + t[1] + '<span class="n">' + t[2] + '</span></button>';
   }).join('');
@@ -591,17 +596,17 @@ __DATA__
     });
     $('status').textContent = q ? list.length + ' de ' + F.length + ' achados' : '';
     var html = '';
-    [1, 2, 3, 4].forEach(function (p) {
-      var g = list.filter(function (f) { return f.priority === p; });
+    ['now', 'backlog'].forEach(function (p) {
+      var g = list.filter(function (f) { return f.bucket === p; });
       if (!g.length) return;
-      html += '<section class="group" aria-labelledby="g' + p + '"><div class="group-head"><h2 id="g' + p + '"><span class="prio p' + p + '">P' + p + '</span>' + PRIO[p].name + '</h2><span class="n">' + g.length + ' ' + (g.length === 1 ? 'achado' : 'achados') + '</span></div><ul class="card rows">' +
+      html += '<section class="group" aria-labelledby="g' + p + '"><div class="group-head"><h2 id="g' + p + '"><i class="sq" style="background:' + BUCKET[p].dot + '" aria-hidden="true"></i>' + BUCKET[p].name + '<small class="hint">' + BUCKET[p].hint + '</small></h2><span class="n">' + g.length + ' ' + (g.length === 1 ? 'achado' : 'achados') + '</span></div><ul class="card rows">' +
         g.map(function (f) {
           var c = critInfo(f);
           var st = f.status === 'new' ? '<span class="pill plain t-accent">Novo</span>' : f.status === 'regressed' ? '<span class="pill plain t-red">Regressão</span>' : '';
           return '<li><details id="' + f.id + '"><summary class="row">' +
             '<span class="chip">' + f.criterion + '</span>' +
             '<span class="main"><span class="t">' + esc(f.title) + '</span><span class="f">' + esc(shortFile(f.location.file)) + '</span></span>' +
-            '<span class="meta">' + st + '<span class="ef">' + IMPACT[f.impact] + ' · esforço ' + EFFORT[f.effort].toLowerCase() + '</span></span>' +
+            '<span class="meta">' + st + impactTag(f) + '<span class="ef">esforço ' + EFFORT[f.effort].toLowerCase() + '</span></span>' +
             '<span class="caret">' + ic('caret-right') + '</span></summary>' +
             '<div class="detail">' +
               '<div class="cols">' +
@@ -623,6 +628,7 @@ __DATA__
                 '<div><dt>Critério</dt><dd>' + f.criterion + ' ' + esc(c.name) + ' (' + c.level + ')</dd></div>' +
                 '<div><dt>Impacto · esforço</dt><dd>' + IMPACT[f.impact] + ' · ' + EFFORT[f.effort] + '</dd></div>' +
                 '<div><dt>Origem</dt><dd>' + SOURCE[f.source] + '</dd></div>' +
+                (f.bucket === 'backlog' ? '<div class="wide"><dt>Por que está no backlog</dt><dd>' + esc(f.backlogReason || '') + '</dd></div>' : '') +
                 '<div><dt>EN 301 549</dt><dd class="mono">' + esc(f.en) + '</dd></div>' +
                 '<div class="wide"><dt>Arquivo</dt><dd class="mono">' + esc(fileLine(f)) + '</dd></div>' +
                 ((f.relatedLocations || []).length
@@ -727,7 +733,7 @@ __DATA__
               '<span class="tags">' + (method && s !== 'skip' ? '<span class="method">' + METHOD[method] + '</span>' : '') + '<span class="pill plain ' + COV[s][1] + '">' + COV[s][0] + '</span></span>' +
               (how ? '<span class="how">' + esc(how) + (s === 'human' && info.check ? ' Roteiro: ' + esc(info.check) + '.' : '') + '</span>' : '') +
               (cf.length ? '<ul class="gl-findings">' + cf.map(function (f) {
-                return '<li><button type="button" data-goto="' + f.id + '"><span class="prio p' + f.priority + '">P' + f.priority + '</span><span>' + esc(f.title) + '</span><span class="ef">' + IMPACT[f.impact] + ' · esforço ' + EFFORT[f.effort].toLowerCase() + '</span></button></li>';
+                return '<li><button type="button" data-goto="' + f.id + '">' + impactTag(f) + '<span>' + esc(f.title) + '</span><span class="ef">' + IMPACT[f.impact] + ' · esforço ' + EFFORT[f.effort].toLowerCase() + '</span></button></li>';
               }).join('') + '</ul>' : '') +
               '</div>';
           }).join('') + '</div></div>');

@@ -5,7 +5,7 @@
  *   node build-report.mjs <run-dir>
  *
  * Reads  <run-dir>/raw/findings.input.json  (written by the agent, schema in references/rubric.md)
- * Writes <run-dir>/findings.json            (enriched: id, priority, EN clause, status vs previous runs)
+ * Writes <run-dir>/findings.json            (enriched: id, phase bucket, EN clause, status vs previous runs)
  *        <run-dir>/report.html              (self-contained report from templates/report.html)
  *
  * Previous runs are the sibling directories of <run-dir> that contain a findings.json; they are
@@ -23,7 +23,6 @@ const TEMPLATE = join(HERE, '..', 'templates', 'report.html');
 const IMPACTS = ['blocker', 'high', 'medium', 'low'];
 const EFFORTS = ['S', 'M', 'L'];
 const SOURCES = ['static', 'runtime', 'review'];
-const MATRIX = { blocker: { S: 1, M: 1, L: 2 }, high: { S: 1, M: 2, L: 3 }, medium: { S: 2, M: 3, L: 3 }, low: { S: 3, M: 4, L: 4 } };
 const WCAG = new Set(
   (
     '1.1.1 1.2.1 1.2.2 1.2.3 1.2.4 1.2.5 1.3.1 1.3.2 1.3.3 1.3.4 1.3.5 1.4.1 1.4.2 1.4.3 1.4.4 1.4.5 1.4.10 1.4.11 1.4.12 1.4.13 ' +
@@ -127,6 +126,11 @@ const findings = (input.findings || []).map((f, i) => {
   if (!f.location || !f.location.file) problems.push(`${where}: missing location.file`);
 
   const location = { file: '', line: 0, selector: '', state: '', ...(f.location || {}) };
+  // Everything in the topic is fixed in this phase, except what cannot be done inside it.
+  const backlog = f.backlog !== undefined ? !!f.backlog : f.effort === 'L' || !!f.external;
+  const backlogReason =
+    f.backlogReason || (backlog ? (f.external ? 'Depende de uma biblioteca externa.' : 'Esforço grande: precisa de planejamento próprio.') : '');
+  if (f.backlog === true && !f.backlogReason) problems.push(`${where}: "backlog": true needs "backlogReason"`);
   const key = f.key || `${f.source}:${location.selector || location.line || ''}`;
   const id = f.id || `A11Y-${createHash('sha1').update(`${f.criterion}|${location.file}|${key}`).digest('hex').slice(0, 6)}`;
   return {
@@ -138,7 +142,8 @@ const findings = (input.findings || []).map((f, i) => {
     criterionName: f.criterionName || '',
     impact: f.impact,
     effort: f.effort,
-    priority: MATRIX[f.impact]?.[f.effort] ?? 4,
+    bucket: backlog ? 'backlog' : 'now',
+    backlogReason,
     source: f.source,
     confidence: f.confidence || 'confirmed',
     location,
@@ -294,7 +299,12 @@ const output = {
       lang: st.lang || '',
     })),
   })),
-  findings: findings.sort((a, b) => a.priority - b.priority || IMPACTS.indexOf(a.impact) - IMPACTS.indexOf(b.impact)),
+  findings: findings.sort(
+    (a, b) =>
+      (a.bucket === b.bucket ? 0 : a.bucket === 'now' ? -1 : 1) ||
+      IMPACTS.indexOf(a.impact) - IMPACTS.indexOf(b.impact) ||
+      EFFORTS.indexOf(a.effort) - EFFORTS.indexOf(b.effort),
+  ),
   coverage,
   fixed,
   notRechecked,
@@ -314,7 +324,7 @@ for (const w of warnings) console.warn(`warning: ${w}`);
 console.log(
   [
     `report: ${join(runDir, 'report.html')}`,
-    `findings: ${output.findings.length} (P1 ${count((f) => f.priority === 1)}, P2 ${count((f) => f.priority === 2)}, P3 ${count((f) => f.priority === 3)}, P4 ${count((f) => f.priority === 4)})`,
+    `findings: ${output.findings.length} (this phase ${count((f) => f.bucket === 'now')}, backlog ${count((f) => f.bucket === 'backlog')})`,
     `coverage: ${Object.entries(
       Object.values(coverage).reduce((acc, o) => ({ ...acc, [o.status]: (acc[o.status] || 0) + 1 }), {}),
     )

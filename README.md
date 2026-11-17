@@ -1,8 +1,8 @@
 # bbb-a11y-audit
 
-An agent skill that audits the BigBlueButton HTML5 client against **WCAG 2.2 A/AA** (EN 301 549 clause 9) and writes a prioritized HTML report.
+An agent skill that audits the BigBlueButton HTML5 client against **WCAG 2.2 A/AA** (EN 301 549 clause 9) and writes an HTML report.
 
-Each finding comes with the criterion, evidence, a screenshot with the problem marked, a fix, a way to verify it, and a priority (impact × effort).
+Each finding comes with the criterion, evidence, a screenshot with the problem marked, a fix, a way to verify it, an impact and an effort. Everything in the chosen topic is meant to be fixed in that phase; only what cannot fit (external libraries, large redesigns) goes to a backlog, with the reason.
 
 ## How it works
 
