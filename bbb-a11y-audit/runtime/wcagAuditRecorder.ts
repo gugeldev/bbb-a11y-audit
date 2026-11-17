@@ -83,6 +83,8 @@ interface StateRecord {
   /** Rules that ran and passed in this state: evidence for criteria that pass. */
   passes?: Array<{ id: string; help: string; tags: string[]; nodeCount: number }>;
   elements?: Record<string, Box>;
+  /** Accessibility tree (roles, names, states) computed by Chromium, as a YAML file under aria/. */
+  aria?: string;
 }
 
 interface Announcement {
@@ -237,6 +239,7 @@ export class AuditRecorder {
   ) {
     this.shotsDir = join(outDir, 'shots');
     mkdirSync(this.shotsDir, { recursive: true });
+    mkdirSync(join(outDir, 'aria'), { recursive: true });
   }
 
   /** Opens a state with `enter`, audits it, screenshots it, then runs `leave` (errors in leave are tolerated). */
@@ -273,6 +276,12 @@ export class AuditRecorder {
       record.url = page.url().replace(/sessionToken=[^&]+/, 'sessionToken=…');
       record.lang = await page.evaluate(() => document.documentElement.lang);
       record.elements = await elementBoxes(page);
+      if (wants('4.1', '1.1', '1.3', '2.4', '2.5', '3.3')) {
+        const yml = await page.locator('body').ariaSnapshot({ timeout: 15000 });
+        const ariaFile = `aria/${this.scenario.id}--${id}.yml`;
+        writeFileSync(join(this.outDir, ariaFile), yml);
+        record.aria = ariaFile;
+      }
     } catch {
       // screenshot is best effort
     }
@@ -429,6 +438,115 @@ export async function checkTextSpacing(page: PlaywrightPage) {
   const key = (item: { tag: string; className?: string; text: string }) => `${item.tag}|${item.className}|${item.text}`;
   const beforeKeys = new Set(before.map(key));
   return { newlyClipped: after.filter((item) => !beforeKeys.has(key(item))).slice(0, 25) };
+}
+
+const STATE_ATTRS = [
+  'aria-pressed',
+  'aria-expanded',
+  'aria-checked',
+  'aria-selected',
+  'aria-current',
+  'aria-disabled',
+  'aria-label',
+  'aria-haspopup',
+  'role',
+  'title',
+];
+
+/** Attributes of the element at `selector`, or of whatever now sits where it was (buttons often swap). */
+async function stateAt(page: PlaywrightPage, selector: string, fallback?: Box | null) {
+  return page.evaluate(
+    ({ sel, attrs, box }) => {
+      let el = document.querySelector(sel) as HTMLElement | null;
+      if (!el && box) {
+        const hit = document.elementFromPoint(box.x + box.w / 2, box.y + box.h / 2);
+        el = (hit?.closest('button,[role],a,input') as HTMLElement | null) || null;
+      }
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      const out: Record<string, string | null> = {
+        tag: el.tagName.toLowerCase(),
+        dataTest: el.getAttribute('data-test') || el.getAttribute('data-testid'),
+        text: (el.textContent || '').trim().slice(0, 60),
+        box: JSON.stringify({
+          x: Math.round(r.left),
+          y: Math.round(r.top),
+          w: Math.round(r.width),
+          h: Math.round(r.height),
+        }),
+      };
+      attrs.forEach((a) => {
+        out[a] = el!.getAttribute(a);
+      });
+      return out;
+    },
+    { sel: selector, attrs: STATE_ATTRS, box: fallback || null },
+  );
+}
+
+/**
+ * 4.1.2 states: activate a toggle or a menu trigger and report which ARIA attributes changed.
+ * A toggle that changes visually but not in ARIA fails 4.1.2.
+ */
+export async function checkStateChange(page: PlaywrightPage, trigger: string, restore: 'click' | 'escape') {
+  try {
+    const before = await stateAt(page, trigger);
+    if (!before) throw new Error('trigger not found');
+    const box = before.box ? (JSON.parse(before.box) as Box) : null;
+    await page.locator(trigger).first().click();
+    await page.waitForTimeout(SETTLE_MS);
+    const after = await stateAt(page, trigger, box);
+    const changed = STATE_ATTRS.filter((a) => (before?.[a] ?? null) !== (after?.[a] ?? null));
+    if (restore === 'escape') await page.keyboard.press('Escape');
+    else if (after?.dataTest) await page.locator(`[data-test="${after.dataTest}"]`).first().click();
+    else await page.locator(trigger).first().click();
+    await page.waitForTimeout(SETTLE_MS);
+    return { trigger, before, after, changedAttributes: changed, swappedElement: before.dataTest !== after?.dataTest };
+  } catch (err) {
+    await page.keyboard.press('Escape').catch(() => undefined);
+    return { trigger, error: String(err).split('\n')[0].slice(0, 200) };
+  }
+}
+
+/**
+ * 4.1.2 selection: open a menu, pick a different item, reopen it and report how the current choice
+ * is exposed (aria-checked / aria-selected / aria-current / role) before and after.
+ */
+export async function checkMenuSelection(page: PlaywrightPage, trigger: string, itemSelector: string) {
+  const readItems = () =>
+    page.evaluate(
+      ({ sel, attrs }) =>
+        Array.from(document.querySelectorAll(sel)).map((el) => {
+          const o: Record<string, string | null> = {
+            id: el.id || null,
+            text: (el.textContent || '').trim().slice(0, 60),
+          };
+          attrs.forEach((a) => {
+            o[a] = el.getAttribute(a);
+          });
+          return o;
+        }),
+      { sel: itemSelector, attrs: ['role', 'aria-checked', 'aria-selected', 'aria-current', 'aria-label'] },
+    );
+  try {
+    await page.locator(trigger).first().click();
+    await page.waitForTimeout(SETTLE_MS);
+    const before = await readItems();
+    const target = page.locator(itemSelector).nth(1);
+    if ((await page.locator(itemSelector).count()) < 2) throw new Error(`fewer than two items match ${itemSelector}`);
+    const picked = ((await target.textContent()) || '').trim().slice(0, 60);
+    await target.click();
+    await page.waitForTimeout(SETTLE_MS * 2);
+    await page.keyboard.press('Escape');
+    await page.locator(trigger).first().click();
+    await page.waitForTimeout(SETTLE_MS);
+    const after = await readItems();
+    await page.keyboard.press('Escape');
+    return { trigger, picked, before, after };
+  } catch (err) {
+    await page.keyboard.press('Escape').catch(() => undefined);
+    return { trigger, error: String(err).split('\n')[0].slice(0, 200) };
+  }
 }
 
 /**

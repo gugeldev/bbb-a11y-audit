@@ -1,5 +1,6 @@
 import { devices, Page as PlaywrightPage } from '@playwright/test';
 
+import { ELEMENT_WAIT_EXTRA_LONG_TIME, ELEMENT_WAIT_LONGER_TIME } from '../core/constants';
 import { elements as e } from '../core/elements';
 import { Page } from '../core/page';
 import { test } from '../core/setup/fixtures';
@@ -14,7 +15,9 @@ import {
   checkFocusReturn,
   checkHoverFocus,
   checkKeyboard,
+  checkMenuSelection,
   checkReflow,
+  checkStateChange,
   checkTextSpacing,
   clearAnnouncements,
   installAnnouncementRecorder,
@@ -148,6 +151,33 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
             e.usersListSidebarButton,
           ]),
         ['1.4'],
+      );
+      await rec.check(
+        'stateChanges',
+        async () => {
+          const out = [];
+          out.push(await checkStateChange(p, e.unmuteMicButton, 'click'));
+          out.push(await checkStateChange(p, e.raiseHandBtn, 'click'));
+          for (const trigger of [
+            e.audioDropdownMenu,
+            e.mediaAreaButton,
+            e.optionsButton,
+            e.leaveMeetingDropdown,
+            e.reactionsButton,
+          ]) {
+            out.push(await checkStateChange(p, trigger, 'escape'));
+          }
+          return out;
+        },
+        ['4.1', '1.3'],
+      );
+      await rec.check(
+        'deviceSelection',
+        async () => [
+          await checkMenuSelection(p, e.audioDropdownMenu, '[id^="audioinput-"]'),
+          await checkMenuSelection(p, e.audioDropdownMenu, '[id^="audiooutput-"]'),
+        ],
+        ['4.1', '1.3'],
       );
       await rec.state(p, 'audio-menu', 'Menu de áudio', 'Menu de dispositivos e saída do áudio.', {
         enter: () => mod.waitAndClick(e.audioDropdownMenu),
@@ -463,6 +493,84 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
       await att.page.close();
       await mod.page.waitForTimeout(3000);
       await rec.collectAnnouncements(mod.page, 'moderador: participante saiu da sala');
+    } catch (err) {
+      rec.note('scenarioError', String(err).split('\n').slice(0, 2).join(' ').slice(0, 500));
+    } finally {
+      rec.write();
+    }
+  });
+
+  test('breakout: rooms running', async ({ browser, context, page }, testInfo) => {
+    test.skip(!wants('4.1', '2.2', '1.3', '1.4', '2.1', '2.4', '3.2'), 'not relevant to the selected topic');
+    test.setTimeout(TIMEOUT);
+    const rec = new AuditRecorder(
+      {
+        id: 'breakout',
+        name: 'Salas de grupo em andamento',
+        description:
+          'O moderador cria uma sala de grupo com um participante. Audita o convite, a sala por dentro e o painel do moderador, e grava o que é anunciado durante 30 segundos sem interação (a contagem regressiva do tempo restante).',
+        actors: ['attendee', 'moderator'],
+      },
+      auditOutDir(testInfo.outputPath('a11y-audit')),
+    );
+    try {
+      await installAnnouncementRecorder(context);
+      const users = new MultiUsers(browser, context);
+      await users.initModPage(page, { testInfo });
+      await users.initUserPage(context, { testInfo });
+      const mod = users.modPage;
+      const att = users.userPage;
+      // the creation panel needs a wide viewport to show the start button
+      await mod.setHeightWidthViewPortSize({ width: 1920, height: 1080 });
+      await mod.waitAndClick(e.breakoutRoomSidebarButton);
+      await mod.waitForSelector(e.attendeeNotAssigned, ELEMENT_WAIT_EXTRA_LONG_TIME);
+      await mod.dragDropSelector(e.attendeeNotAssigned, e.breakoutBox1);
+      await mod.waitAndClick(e.createBreakoutRoomsButton, ELEMENT_WAIT_LONGER_TIME);
+      await mod.setHeightWidthViewPortSize();
+
+      await rec.state(
+        att.page,
+        'attendee-invite',
+        'Convite para a sala (participante)',
+        'Modal que convida o participante a entrar na sala de grupo.',
+        { actor: 'attendee', enter: () => att.hasElement(e.modalConfirmButton, 'attendee should be invited') },
+      );
+      const newTab = context.waitForEvent('page', { timeout: ELEMENT_WAIT_EXTRA_LONG_TIME }).catch(() => null);
+      await att.waitAndClick(e.modalConfirmButton);
+      const room = (await newTab) || att.page;
+      await room.waitForLoadState('domcontentloaded');
+      await room.locator(e.presentationTitle).waitFor({ state: 'visible', timeout: ELEMENT_WAIT_EXTRA_LONG_TIME });
+      if (
+        await room
+          .locator(e.audioModal)
+          .isVisible()
+          .catch(() => false)
+      ) {
+        await room
+          .locator(e.closeModal)
+          .click()
+          .catch(() => undefined);
+      }
+      await rec.state(
+        room,
+        'attendee-in-room',
+        'Dentro da sala de grupo (participante)',
+        'Cliente da sala de grupo, com o tempo restante.',
+        { actor: 'attendee' },
+      );
+      await rec.state(
+        mod.page,
+        'mod-rooms-running',
+        'Salas em andamento (moderador)',
+        'Painel do moderador com a sala de grupo rodando.',
+        { actor: 'moderator', enter: () => mod.hasElement(e.roomOptions1, 'rooms should be running') },
+      );
+      await clearAnnouncements(room);
+      await clearAnnouncements(mod.page);
+      await room.waitForTimeout(30000);
+      await rec.collectAnnouncements(room, 'participante na sala de grupo: 30 s sem interagir');
+      await rec.collectAnnouncements(mod.page, 'moderador na sala principal: 30 s sem interagir');
+      rec.note('idleSeconds', 30);
     } catch (err) {
       rec.note('scenarioError', String(err).split('\n').slice(0, 2).join(' ').slice(0, 500));
     } finally {

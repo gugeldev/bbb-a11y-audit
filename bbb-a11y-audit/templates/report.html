@@ -394,7 +394,7 @@ details.ann > summary:hover { background: var(--soft-2); }
       <div class="cov" id="coverage"></div>
     </section>
     <section role="tabpanel" id="panel-leitor" aria-labelledby="tab-leitor" hidden>
-      <p class="intro">Roteiros para uma pessoa executar: critérios que só uma pessoa consegue decidir e confirmações com leitor de tela de verdade.</p>
+      <p class="intro">Só o que a automação não consegue decidir. Os marcados como opcionais são confirmações com um leitor de tela de verdade, úteis depois das correções; eles não mudam o resultado dos critérios.</p>
       <div class="checks" id="checks"></div>
     </section>
   </main>
@@ -529,7 +529,7 @@ __DATA__
   }).join('');
 
   // Abas
-  var TABS = [['diretrizes', 'Por diretriz', Object.keys(GUIDE).filter(glInScope).length], ['achados', 'Lista de achados', F.length], ['cobertura', 'O que foi testado', (D.scenarios || []).length + ' cenários'], ['leitor', 'Teste humano', D.manualChecks.length]];
+  var TABS = [['diretrizes', 'Por diretriz', Object.keys(GUIDE).filter(glInScope).length], ['achados', 'Lista de achados', F.length], ['cobertura', 'O que foi testado', (D.scenarios || []).length + ' cenários'], ['leitor', 'Teste humano', D.manualChecks.filter(function (m) { return !m.optional; }).length + (D.manualChecks.some(function (m) { return m.optional; }) ? ' + ' + D.manualChecks.filter(function (m) { return m.optional; }).length + ' opcionais' : '')]];
   $('tabs').innerHTML = TABS.map(function (t, i) {
     return '<button role="tab" id="tab-' + t[0] + '" aria-controls="panel-' + t[0] + '" aria-selected="' + (i === 0) + '" tabindex="' + (i ? -1 : 0) + '">' + t[1] + '<span class="n">' + t[2] + '</span></button>';
   }).join('');
@@ -781,8 +781,9 @@ __DATA__
   });
 
   // Leitor de tela
-  $('checks').innerHTML = D.manualChecks.map(function (m) {
-    return '<section class="card check"><div class="head"><div><h3>' + esc(m.flow) + '</h3><p class="tool">' + esc(m.tool) + '</p></div></div><ol class="steps">' +
+  $('checks').innerHTML = D.manualChecks.slice().sort(function (a, b) { return (a.optional ? 1 : 0) - (b.optional ? 1 : 0); }).map(function (m) {
+    return '<section class="card check"><div class="head"><div><h3>' + esc(m.flow) + '</h3><p class="tool">' + esc(m.tool) + '</p>' +
+      '<p style="margin-top:8px"><span class="pill plain ' + (m.optional ? 't-gray">Opcional' : 't-amber">Obrigatório') + '</span></p></div></div><ol class="steps">' +
       m.steps.map(function (s) { return '<li><span>' + esc(s) + '</span></li>'; }).join('') +
       '</ol><p class="expect"><b>Esperado</b>' + esc(m.expect) + '</p></section>';
   }).join('');

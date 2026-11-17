@@ -4,9 +4,10 @@ Automated checks confirm that names, roles and live regions exist. They do not c
 
 ## When to generate them
 
-- Always for the core flows that are in scope: join audio, mute/unmute, chat, leave meeting.
-- For every finding about 4.1.2 (state changes), 4.1.3 (status messages), 2.4.3 (focus after modal) or 1.3.1 in a core flow, add or extend a script so a person can confirm the fix.
-- Keep it to 3–6 scripts per run. Each one takes a few minutes.
+Only for what automation cannot decide. The runtime records announcements, state changes, device selection, countdowns and the accessibility tree; decide from that data. Scripts are for `human` criteria (judging media content) and, marked `"optional": true`, for confirming with a real screen reader something already decided.
+
+- Required: one script per `human` criterion.
+- Optional (`"optional": true`): at most 2–3 real screen-reader confirmations for the core flows in scope, useful after fixes. They never decide a criterion.
 
 ## Format (`manualChecks` in findings.input.json)
 
@@ -14,6 +15,7 @@ Automated checks confirm that names, roles and live regions exist. They do not c
 {
   "flow": "Mutar e desmutar",
   "tool": "NVDA + Chrome",
+  "optional": true,
   "steps": [
     "Entrar na sala com o NVDA ligado e escolher Microfone no modal de áudio usando só o teclado.",
     "Ir até o botão de microfone com Tab e apertar Espaço."

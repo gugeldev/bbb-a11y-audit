@@ -82,7 +82,7 @@ Do not report what you cannot point to. If something can only be confirmed by a 
 - Classify each finding with `references/rubric.md` (impact, effort, shared, external, key).
 - Keep ids stable across runs (consistency rule 1): reuse the previous `key`, or set `id` explicitly, for every problem that is still there.
 - Fill `coverage` for every in-scope criterion that is not failing (and add `method`/`how` to failing ones too), following the coverage rule in `references/criteria.md`: `pass` or `na` with `method` and `how`, `human` only for what truly needs a person (with its script), `not-covered` only when this run could not decide it (with what is missing). The goal is that a guideline can be closed with nothing left open; `build-report.mjs` refuses missing entries.
-- Write `manualChecks`: one for every `human` criterion, plus screen-reader confirmations for the core flows in scope (3–6 in total is typical).
+- Write `manualChecks` only for what automation cannot answer: one for every `human` criterion. If you want a real screen reader to confirm something the runtime already decided, add it with `"optional": true`; never write a script for something the runtime data or the code can decide (state changes, announcements, countdowns, device selection are all recorded).
 - Fill `meta.summary`, `meta.reviewedFlows` and `meta.notCovered`: they make the "O que foi testado" tab, which tells the reader exactly what was and was not checked.
 
 ## 6. Build the report
