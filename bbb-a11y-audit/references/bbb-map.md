@@ -14,26 +14,28 @@ Core flows decide impact (see `rubric.md`). Review them first when time is limit
 | Mute, unmute, leave audio, device selection | yes | `audio/audio-graphql/audio-controls/` (incl. `input-stream-live-selector/`), `muted-alert/`, `profile-settings/` | moderator/meeting, moderator/audio-menu, moderator/settings-audio |
 | Actions bar | yes | `actions-bar/`, `actions-bar/media-area/` | moderator/meeting, moderator/media-area-menu |
 | User list | yes | `user-list/`, `sidebar-navigation/`, `user-avatar/` | moderator/user-list, moderator/user-item-menu, interactions/attendee-user-list, interactions/mod-raised-hand, interactions/mod-attendee-menu, interactions/remove-user-confirm |
-| Moderator requests (camera, presenter) | no | `request-camera-modal/`, `request-presenter/`, `lock-viewers/` | interactions/attendee-camera-request, interactions/attendee-request-presenter, interactions/mod-presenter-request, moderator/lock-viewers |
+| Moderator requests (camera, presenter) | no | `request-camera-modal/`, `request-presenter/`, `lock-viewers/` | interactions/attendee-camera-request, interactions/attendee-request-presenter, interactions/mod-presenter-request, moderator/lock-viewers, moderator/guest-policy, moderator/presentation-policy |
 | Public and private chat | yes | `chat/chat-graphql/`, `emoji-picker/`, `text-input/` | moderator/public-chat, moderator/chat-options, moderator/chat-emoji-picker, moderator/chat-message-toolbar, moderator/chat-react-picker, moderator/chat-reply, moderator/chat-pin-confirm, moderator/chat-delete-confirm, interactions/mod-unread-chat, interactions/attendee-private-message, interactions/mod-private-chat |
 | Presentation viewing | yes | `presentation/`, `presentation/presentation-toolbar/`, `presentation/presentation-menu/` | moderator/meeting, moderator/presentation-menu, interactions/attendee-meeting |
 | Leave meeting, meeting ended, removed | yes | `nav-bar/`, `meeting-ended/`, `end-meeting-confirmation/` | moderator/options-menu, moderator/leave-menu, moderator/end-meeting, moderator/meeting-ended, interactions/attendee-removed |
 | Connection lost, reconnecting | yes for announcements | `connection-manager/`, `notifications-bar/`, `reload-button/` | connection/reconnecting |
-| Settings | no | `settings/`, `common/locales-dropdown/`, `about/` | moderator/settings, moderator/settings-notifications, moderator/settings-data-saving, moderator/settings-audio, moderator/settings-shortcuts, moderator/settings-about, locale-pt-br/settings, dark-theme/settings |
+| Settings | no | `settings/`, `common/locales-dropdown/`, `about/` | moderator/settings, moderator/settings-notifications, moderator/settings-data-saving, moderator/settings-audio, moderator/settings-audio-device-test, moderator/settings-shortcuts, moderator/settings-shortcuts-presentation, moderator/settings-shortcuts-whiteboard, moderator/settings-about, locale-pt-br/settings, dark-theme/settings |
 | Layout | no | `layout/` | moderator/layout-view |
 | Recording | no | `recording/`, `nav-bar/nav-bar-graphql/recording-indicator/` | moderator/recording-confirm (meeting created with `record=true`) |
 | Polling | no | `poll/`, `polling/` | moderator/poll-create, moderator/poll-running, interactions/attendee-poll, interactions/mod-poll-results |
 | Breakout rooms | no | `breakout-room/`, `breakout-join-confirmation/` | moderator/breakout, breakout/attendee-invite, breakout/attendee-in-room, breakout/mod-rooms-running, breakout/mod-room-menu |
 | Shared notes | no | `bn-shared-notes/`, `notes/` (BlockNote editor) | moderator/shared-notes, moderator/notes-options |
 | Whiteboard | no | `whiteboard/` (tldraw) | moderator/whiteboard-toolbar, moderator/whiteboard-menu (drawing itself not exercised) |
-| Webcams | no | `video-provider/`, `video-preview/`, `webcam/`, `camera-settings/` | moderator/webcam-preview, moderator/webcam-on, moderator/webcam-button-menu, moderator/webcam-menu (fake camera) |
+| Webcams | no | `video-provider/`, `video-preview/`, `webcam/`, `camera-settings/` | moderator/webcam-preview, moderator/webcam-preview-virtual-background-settings, moderator/webcam-on, moderator/webcam-button-menu, moderator/webcam-menu (fake camera) |
 | Screen share | no | `screenshare/`, `actions-bar/screenshare/` | moderator/screenshare |
 | Presentation upload | no | `actions-bar/media-area/media-sharing/presentation/` (incl. `presentation-download-dropdown/`), `presentation/presentation-toast/presentation-uploader-toast/` | moderator/presentation-upload, moderator/presentation-download-menu |
 | External video | no | `external-video-player/` | moderator/external-video-modal, moderator/external-video-playing (video served by the suite's stub) |
 | Reactions, raise hand | no | `user-reaction/`, `emoji-picker/`, `emoji-rain/`, `raisehand-notifier/` | moderator/reactions, moderator/raise-hand, interactions/mod-raised-hand |
 | Notifications and toasts | yes for announcements | `notifications/`, `common/toast/`, `screenreader-alert/` | `announcements` in every scenario |
 | Timer, captions, apps gallery, plugins | no | `timer/`, `audio/audio-graphql/audio-captions/`, `apps-gallery/`, `plugins-engine/`, `plugins/` | moderator/timer, moderator/apps-gallery (captions need speech recognition and plugins need a plugin installed on the server: review only) |
-| Session info, connection status | no | `session-details/`, `connection-status/` | moderator/session-details, moderator/connection-status |
+| Session info, connection status | no | `session-details/`, `connection-status/` | moderator/session-details, moderator/connection-status, moderator/connection-status-my-logs, moderator/connection-status-session-logs |
+
+Tabs are visited automatically: in lock viewers, settings, the webcam preview and connection status, every visible tab becomes its own state (settings also one level of nested tabs), named from `TAB_STATE_IDS` in `wcagAudit.spec.ts` or `<dialog>-<tab label>`. A new tab is audited without touching the spec.
 
 Conditional screens with no runtime state, decided by the review only: `activity-check/` (inactivity modal, needs a server timeout), `mobile-app-modal/`, `common/media-consent-modal/`, `livekit/autoplay-modal/`, `error-screen/` (fatal errors), `debug-window/` (developer only).
 

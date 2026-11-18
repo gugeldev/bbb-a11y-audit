@@ -60,14 +60,73 @@ const LIVE_REGION = '[aria-live]:not([aria-live="off"]),[role="status"],[role="a
 
 type Steps = Pick<StateOptions, 'enter' | 'leave'>;
 
-// Every tab of the settings modal after the first one, which opens with the modal.
-const SETTINGS_TABS = [
-  { id: 'settings-notifications', name: 'Notificações', trigger: e.notificationsTab },
-  { id: 'settings-data-saving', name: 'Economia de dados', trigger: e.dataSavingsTab },
-  { id: 'settings-audio', name: 'Áudio', trigger: e.audioTab },
-  { id: 'settings-shortcuts', name: 'Atalhos de teclado', trigger: e.shortcutsTab },
-  { id: 'settings-about', name: 'Sobre', trigger: e.aboutTabButton },
-];
+// State ids of tabs that existing findings already point at, keyed by the tab's (English) label.
+// Any other tab gets an id built from its label, so a tab added later is audited too.
+const TAB_STATE_IDS: Record<string, string> = {
+  Notifications: 'settings-notifications',
+  'Data savings': 'settings-data-saving',
+  Audio: 'settings-audio',
+  'Keyboard shortcuts': 'settings-shortcuts',
+  About: 'settings-about',
+  'Guest Policy': 'guest-policy',
+  'Presentation Policy': 'presentation-policy',
+};
+
+const slug = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+
+interface TabsOptions {
+  /** Prefix of the state ids of tabs without a known id. */
+  idPrefix: string;
+  /** Prefix of the state names (what the report shows). */
+  namePrefix: string;
+  /** Labels of tabs that belong to an outer tab list, so they are not audited again. */
+  skip?: string[];
+  /** Also audit the tabs that appear inside each tab (one level). */
+  nested?: boolean;
+}
+
+async function visibleTabs(page: PlaywrightPage) {
+  return page.locator('[role="tab"]:visible').evaluateAll((tabs) =>
+    tabs.map((tab) => ({
+      label: (tab.textContent || '').trim(),
+      selected: tab.getAttribute('aria-selected') === 'true',
+    })),
+  );
+}
+
+/**
+ * Audits every tab on screen that is not already selected (the selected one was audited when its
+ * dialog opened). Tabs are read from the page, not listed by hand, so none is left out when the
+ * client adds one. Returns to the tab that was selected, so the dialog is left as it was found.
+ */
+async function auditTabs(rec: AuditRecorder, user: Page, options: TabsOptions) {
+  const { idPrefix, namePrefix, skip = [], nested = false } = options;
+  const tabs = (await visibleTabs(user.page)).filter((tab) => tab.label && !skip.includes(tab.label));
+  const tabNamed = (label: string) => user.page.locator('[role="tab"]:visible').filter({ hasText: label }).first();
+  const initiallySelected = tabs.find((tab) => tab.selected);
+
+  for (const tab of tabs.filter((t) => !t.selected)) {
+    const id = TAB_STATE_IDS[tab.label] || `${idPrefix}-${slug(tab.label)}`;
+    const name = `${namePrefix}: ${tab.label}`;
+    const opened = await rec.state(user.page, {
+      id,
+      name,
+      description: `Aba "${tab.label}" de ${namePrefix}.`,
+      enter: () => tabNamed(tab.label).click(),
+    });
+    if (opened && nested) {
+      await auditTabs(rec, user, { idPrefix: id, namePrefix: name, skip: [...skip, ...tabs.map((t) => t.label)] });
+    }
+  }
+  if (initiallySelected)
+    await tabNamed(initiallySelected.label)
+      .click()
+      .catch(() => undefined);
+}
 
 /** A menu, popover or modal: opened by clicking `trigger`, closed with Escape. */
 const opensWith = (user: Page, trigger: string): Steps => ({
@@ -274,15 +333,11 @@ async function auditPeopleAndChat(rec: AuditRecorder, mod: Page) {
   await rec.state(page, {
     id: 'lock-viewers',
     name: 'Travar participantes',
-    description: 'Modal de bloqueio de recursos dos participantes.',
+    description: 'Modal de bloqueio de recursos dos participantes, aba inicial.',
     enter: () => openLockViewers(mod),
   });
-  await rec.state(page, {
-    id: 'guest-policy',
-    name: 'Política de convidados',
-    description: 'Aba de política de convidados no mesmo modal.',
-    ...opensWith(mod, e.guestPolicyTab),
-  });
+  await auditTabs(rec, mod, { idPrefix: 'lock-viewers', namePrefix: 'Permissões' });
+  await pressEscape(page);
   await rec.state(page, {
     id: 'public-chat',
     name: 'Chat público',
@@ -382,14 +437,7 @@ async function auditSettingsAndTools(rec: AuditRecorder, mod: Page) {
   });
   // Inside an open modal: focus must stay in the dialog (and not escape to the page behind it).
   await rec.check('keyboard-settings-modal', () => checkKeyboard(page, 40), ['2.1', '2.4']);
-  for (const tab of SETTINGS_TABS) {
-    await rec.state(page, {
-      id: tab.id,
-      name: tab.name,
-      description: `Aba "${tab.name}" dentro das configurações.`,
-      enter: () => mod.waitAndClick(tab.trigger),
-    });
-  }
+  await auditTabs(rec, mod, { idPrefix: 'settings', namePrefix: 'Configurações', nested: true });
   await pressEscape(page);
   await rec.state(page, {
     id: 'poll-create',
@@ -534,6 +582,7 @@ async function auditMediaAndSharing(rec: AuditRecorder, mod: Page) {
       await mod.hasElement(e.startSharingWebcam, 'should display the webcam preview');
     },
   });
+  await auditTabs(rec, mod, { idPrefix: 'webcam-preview', namePrefix: 'Prévia da webcam' });
   await rec.state(page, {
     id: 'webcam-on',
     name: 'Webcam compartilhada',
@@ -610,9 +659,11 @@ async function auditMeetingMenus(rec: AuditRecorder, mod: Page) {
   await rec.state(page, {
     id: 'connection-status',
     name: 'Status da conexão',
-    description: 'Modal de status da conexão.',
-    ...opensWith(mod, e.connectionStatusBtn),
+    description: 'Modal de status da conexão, aba inicial.',
+    enter: () => mod.waitAndClick(e.connectionStatusBtn),
   });
+  await auditTabs(rec, mod, { idPrefix: 'connection-status', namePrefix: 'Status da conexão' });
+  await pressEscape(page);
   await rec.state(page, {
     id: 'options-menu',
     name: 'Menu de opções',
