@@ -9,25 +9,33 @@ Core flows decide impact (see `rubric.md`). Review them first when time is limit
 | Flow | Core | Main code | Runtime states (`<scenario>/<state>`) |
 | --- | --- | --- | --- |
 | Join and guest lobby | yes | `join-handler/`, `join-handler/guest-wait/`, `common/lobby-message-input/`, `user-list/guest-management/` | guest/guest-lobby, guest/mod-waiting-list, guest/guest-lobby-message, guest/guest-admitted |
+| Pre-flight (setup screen before joining, off by default, per session `userdata-bbb_pre_flight`) | yes | `pre-flight/` (session info, setup panel, settings, guest lobby, error screens), `media-setup/` | pre-flight/pre-flight, pre-flight/pre-flight-settings, pre-flight/pre-flight-camera-on, pre-flight/pre-flight-device-permission, pre-flight/pre-flight-guest-lobby, pre-flight/pre-flight-guest-denied |
 | Audio modal, join audio | yes | `audio/audio-modal/`, `audio/audio-graphql/` | moderator/audio-modal, moderator/audio-echo-test, mobile/audio-modal |
-| Mute, unmute, leave audio, device selection | yes | `audio/audio-graphql/audio-controls/` (incl. `input-stream-live-selector/`), `muted-alert/` | moderator/meeting, moderator/audio-menu |
+| Mute, unmute, leave audio, device selection | yes | `audio/audio-graphql/audio-controls/` (incl. `input-stream-live-selector/`), `muted-alert/`, `profile-settings/` | moderator/meeting, moderator/audio-menu, moderator/settings-audio |
 | Actions bar | yes | `actions-bar/`, `actions-bar/media-area/` | moderator/meeting, moderator/media-area-menu |
-| User list | yes | `user-list/`, `sidebar-navigation/` | moderator/user-list, moderator/user-item-menu, interactions/attendee-user-list, interactions/mod-raised-hand |
-| Public and private chat | yes | `chat/chat-graphql/` | moderator/public-chat, moderator/chat-options, interactions/mod-unread-chat, interactions/attendee-private-message |
-| Presentation viewing | yes | `presentation/`, `presentation/presentation-toolbar/` | moderator/meeting, interactions/attendee-meeting |
-| Leave meeting, meeting ended | yes | `nav-bar/`, `meeting-ended/` | moderator/options-menu, moderator/leave-menu, moderator/end-meeting (meeting-ended screen not covered) |
-| Settings | no | `settings/`, `common/locales-dropdown/` | moderator/settings, moderator/settings-shortcuts, locale-pt-br/settings, dark-theme/settings |
+| User list | yes | `user-list/`, `sidebar-navigation/`, `user-avatar/` | moderator/user-list, moderator/user-item-menu, interactions/attendee-user-list, interactions/mod-raised-hand, interactions/mod-attendee-menu, interactions/remove-user-confirm |
+| Moderator requests (camera, presenter) | no | `request-camera-modal/`, `request-presenter/`, `lock-viewers/` | interactions/attendee-camera-request, interactions/attendee-request-presenter, interactions/mod-presenter-request, moderator/lock-viewers |
+| Public and private chat | yes | `chat/chat-graphql/`, `emoji-picker/`, `text-input/` | moderator/public-chat, moderator/chat-options, moderator/chat-emoji-picker, moderator/chat-message-toolbar, moderator/chat-react-picker, moderator/chat-reply, moderator/chat-pin-confirm, moderator/chat-delete-confirm, interactions/mod-unread-chat, interactions/attendee-private-message, interactions/mod-private-chat |
+| Presentation viewing | yes | `presentation/`, `presentation/presentation-toolbar/`, `presentation/presentation-menu/` | moderator/meeting, moderator/presentation-menu, interactions/attendee-meeting |
+| Leave meeting, meeting ended, removed | yes | `nav-bar/`, `meeting-ended/`, `end-meeting-confirmation/` | moderator/options-menu, moderator/leave-menu, moderator/end-meeting, moderator/meeting-ended, interactions/attendee-removed |
+| Connection lost, reconnecting | yes for announcements | `connection-manager/`, `notifications-bar/`, `reload-button/` | connection/reconnecting |
+| Settings | no | `settings/`, `common/locales-dropdown/`, `about/` | moderator/settings, moderator/settings-notifications, moderator/settings-data-saving, moderator/settings-audio, moderator/settings-shortcuts, moderator/settings-about, locale-pt-br/settings, dark-theme/settings |
+| Layout | no | `layout/` | moderator/layout-view |
+| Recording | no | `recording/`, `nav-bar/nav-bar-graphql/recording-indicator/` | moderator/recording-confirm (meeting created with `record=true`) |
 | Polling | no | `poll/`, `polling/` | moderator/poll-create, moderator/poll-running, interactions/attendee-poll, interactions/mod-poll-results |
-| Breakout rooms | no | `breakout-room/`, `breakout-join-confirmation/` | moderator/breakout (invitation for attendees not covered) |
-| Shared notes | no | `bn-shared-notes/`, `notes/` (BlockNote editor) | moderator/shared-notes |
+| Breakout rooms | no | `breakout-room/`, `breakout-join-confirmation/` | moderator/breakout, breakout/attendee-invite, breakout/attendee-in-room, breakout/mod-rooms-running, breakout/mod-room-menu |
+| Shared notes | no | `bn-shared-notes/`, `notes/` (BlockNote editor) | moderator/shared-notes, moderator/notes-options |
 | Whiteboard | no | `whiteboard/` (tldraw) | moderator/whiteboard-toolbar, moderator/whiteboard-menu (drawing itself not exercised) |
-| Webcams | no | `video-provider/`, `video-preview/`, `webcam/` | moderator/webcam-preview, moderator/webcam-on, moderator/webcam-menu (fake camera) |
+| Webcams | no | `video-provider/`, `video-preview/`, `webcam/`, `camera-settings/` | moderator/webcam-preview, moderator/webcam-on, moderator/webcam-button-menu, moderator/webcam-menu (fake camera) |
 | Screen share | no | `screenshare/`, `actions-bar/screenshare/` | moderator/screenshare |
-| Presentation upload | no | `presentation/presentation-uploader/` | moderator/presentation-upload |
+| Presentation upload | no | `actions-bar/media-area/media-sharing/presentation/` (incl. `presentation-download-dropdown/`), `presentation/presentation-toast/presentation-uploader-toast/` | moderator/presentation-upload, moderator/presentation-download-menu |
+| External video | no | `external-video-player/` | moderator/external-video-modal, moderator/external-video-playing (video served by the suite's stub) |
 | Reactions, raise hand | no | `user-reaction/`, `emoji-picker/`, `emoji-rain/`, `raisehand-notifier/` | moderator/reactions, moderator/raise-hand, interactions/mod-raised-hand |
 | Notifications and toasts | yes for announcements | `notifications/`, `common/toast/`, `screenreader-alert/` | `announcements` in every scenario |
-| Timer, captions, apps gallery, plugins | no | `timer/`, `audio/audio-graphql/audio-captions/`, `apps-gallery/`, `plugins-engine/` | moderator/timer (captions, apps gallery and plugins not opened) |
+| Timer, captions, apps gallery, plugins | no | `timer/`, `audio/audio-graphql/audio-captions/`, `apps-gallery/`, `plugins-engine/`, `plugins/` | moderator/timer, moderator/apps-gallery (captions need speech recognition and plugins need a plugin installed on the server: review only) |
 | Session info, connection status | no | `session-details/`, `connection-status/` | moderator/session-details, moderator/connection-status |
+
+Conditional screens with no runtime state, decided by the review only: `activity-check/` (inactivity modal, needs a server timeout), `mobile-app-modal/`, `common/media-consent-modal/`, `livekit/autoplay-modal/`, `error-screen/` (fatal errors), `debug-window/` (developer only).
 
 ## Shared building blocks
 
@@ -80,23 +88,25 @@ With `A11Y_GUIDELINES` set (a guideline, several, a principle or a criterion), a
 | Topic | Custom checks that run | Scenarios skipped |
 | --- | --- | --- |
 | 1.4 | reflow, textSpacing, nonTextContrast, hoverFocus | none |
-| 2.1, 2.4 | keyboard walks, focusReturn | dark-theme, locale-pt-br, mobile |
-| 3.2 | focusReturn | dark-theme, locale-pt-br, mobile |
-| 3.1 | none | dark-theme, mobile |
-| 2.5 | none | dark-theme |
-| 1.1, 1.3, 4.1 | none (announcements are always recorded) | dark-theme, locale-pt-br |
-| 1.2, 2.2, 2.3, 3.3 | none | dark-theme, locale-pt-br, mobile |
+| 2.1, 2.4 | keyboard walks, focusReturn | dark-theme, locale-pt-br, mobile, connection |
+| 3.2 | focusReturn | dark-theme, locale-pt-br, mobile, connection |
+| 3.1 | none | dark-theme, mobile, connection |
+| 2.5 | none | dark-theme, connection |
+| 1.1, 1.3, 4.1 | none (announcements are always recorded) | dark-theme, locale-pt-br (1.1 also connection) |
+| 1.2, 2.2, 2.3, 3.3 | none | dark-theme, locale-pt-br, mobile (1.2 and 2.3 also connection) |
 
-The moderator, interactions and guest scenarios always run: every topic needs those screens.
+The moderator, interactions, guest and pre-flight scenarios always run: every topic needs those screens.
 
 The spec does not fail on violations. Each scenario is its own test, so one scenario breaking does not lose the others; a scenario that stops early records `checks.scenarioError`.
 
 | Scenario (`id`) | What it does |
 | --- | --- |
-| `moderator` | Joins as moderator, connects audio and opens every panel, menu and modal it can (about 30 states). Runs keyboard walks on the main screen (`keyboard`), with the user list open (`keyboard-user-list`), with the chat open (`keyboard-public-chat`) and inside the settings modal (`keyboard-settings-modal`, focus must stay in the dialog); `focusReturn` (open each menu or modal from its trigger with Enter, close with Escape, report where focus lands); `stateChanges` (activate toggles such as mute and raise hand, and menu triggers, and report which ARIA attributes changed: a toggle whose state changes only visually fails 4.1.2); `deviceSelection` (pick another microphone and speaker in the audio menu and report how the current choice is exposed before and after); `hoverFocus` (for buttons with tooltips: appears on hover and on focus, Escape dismisses it without moving the pointer, it stays while the pointer moves onto it; tooltips already on screen are ignored); reflow, text spacing and non-text contrast on the main state. |
+| `moderator` | Joins as moderator in a meeting created with `record=true` (and the chat emoji picker turned on), connects audio and opens every panel, menu and modal it can (about 55 states: chat message actions, every settings tab, notes options, apps gallery, layout, recording confirmation, presentation menus, external video, webcam menus, and finally ends the meeting to audit the meeting-ended screen). Runs keyboard walks on the main screen (`keyboard`), with the user list open (`keyboard-user-list`), with the chat open (`keyboard-public-chat`) and inside the settings modal (`keyboard-settings-modal`, focus must stay in the dialog); `focusReturn` (open each menu or modal from its trigger with Enter, close with Escape, report where focus lands); `stateChanges` (activate toggles such as mute and raise hand, and menu triggers, and report which ARIA attributes changed: a toggle whose state changes only visually fails 4.1.2); `deviceSelection` (pick another microphone and speaker in the audio menu and report how the current choice is exposed before and after); `hoverFocus` (for buttons with tooltips: appears on hover and on focus, Escape dismisses it without moving the pointer, it stays while the pointer moves onto it; tooltips already on screen are ignored); reflow, text spacing and non-text contrast on the main state. |
 | `breakout` | Moderator creates a breakout room with an attendee. Audits the invitation, the room client and the moderator's panel, then stays idle for 30 s and records every announcement (a countdown read every second shows up here). |
-| `interactions` | Moderator + attendee. Audits the attendee's screens; the attendee sends chat messages (moderator's chat open, then closed), raises a hand, answers a poll, gets a private message and leaves. Records the announcements each side receives. |
+| `interactions` | Moderator + attendee, in a meeting created with `allowModsToRequestCameraShare=true`. Audits the attendee's screens; the attendee sends chat messages (moderator's chat open, then closed), raises a hand, answers a poll and gets a private message. The moderator opens the attendee's menu, asks them to share the camera, gets a presenter request (policy set to require approval) and finally removes them: the confirmation and the removed attendee's screen are audited. Records the announcements each side receives. |
 | `guest` | Meeting with `guestPolicy=ASK_MODERATOR`. Guest lobby, moderator's waiting list, a lobby message, approval. Keyboard and reflow checks on the lobby. |
+| `pre-flight` | The 4.1 setup screen before joining (turned on per user with a client settings override): the screen itself with keyboard, reflow, text spacing and contrast checks, its settings, the camera turned on, the screen shown when the browser refuses the microphone, and, with the guest policy set to ask the moderator, the waiting and denied screens with their announcements. |
+| `connection` | The graphql connection is dropped from inside the browser: audits the reconnecting notice and records what is announced when the connection drops and comes back. |
 | `locale-pt-br` | Client in pt-BR: `lang`, longer strings, text spacing, reflow. |
 | `dark-theme` | Dark mode turned on in settings: contrast. |
 | `mobile` | Pixel 7 emulation, portrait and landscape. |
@@ -105,6 +115,6 @@ Every audited state also writes `aria/<scenario>--<state>.yml`: the accessibilit
 
 Output: `<scenario>.json` with `states[]` (each: `id`, `name`, `actor`, `ok`/`error`, `shot`, `viewport`, `lang`, axe `violations` and `incomplete` with `nodes[].target/html/summary/box`, and `elements`: the on-screen box of every visible `data-test`/`data-testid`), `checks` (`keyboard.stops[]` with boxes and `possibleTrap`, `reflow`, `textSpacing.newlyClipped[]`, `nonTextContrast`, plus notes), and `announcements[]` (`actor` = moment label, `politeness`, `text`, `regionCreatedWithMessage`; an entry with `none: true` means nothing at all was announced in that moment; `unavailable: true` means the recorder could not read that page, which is not silence: never conclude anything from it; nested regions are recorded once, at the outermost region; `regionCreatedWithMessage` is never set for `role=alert`, which is announced on insertion). Screenshots are in `shots/`. Refer to a state as `<scenario>/<state id>` in a finding's `shots`.
 
-Environment artifacts, not findings: toasts such as "Error acquiring wake lock" or camera/microphone permission messages come from the headless, emulated test browser with fake devices. Ignore them unless the same thing would happen to a real user.
+Environment artifacts, not findings: a presentation upload error toast ("Failed to determine the number of pages") means the test server cannot convert presentations, which also leaves the whiteboard states unaudited; fix the server, not the client. Toasts such as "Error acquiring wake lock" or camera/microphone permission messages come from the headless, emulated test browser with fake devices. Ignore them unless the same thing would happen to a real user.
 
 To trace a runtime node to source: search the `data-test` / `data-testid` value, the `id`, or the i18n text (`public/locales/en.json` key → `intlMessages` in the component).

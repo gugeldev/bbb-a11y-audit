@@ -248,7 +248,9 @@ export class AuditRecorder {
 
   /**
    * Opens a state with `enter`, runs axe on it, captures the screen, then runs `leave`.
-   * Returns whether the state was audited.
+   * Returns whether the state was audited. A state that failed to open still gets its screenshot
+   * (it shows what was on screen instead) and is closed with Escape, so whatever it left half open
+   * does not cover the next states.
    */
   async state(page: PlaywrightPage, options: StateOptions): Promise<boolean> {
     const { id, name, description, actor = this.scenario.actors[0], enter, leave } = options;
@@ -267,6 +269,7 @@ export class AuditRecorder {
     } catch {
       await pressEscape(page);
     }
+    if (!record.ok) await pressEscape(page);
     return record.ok;
   }
 

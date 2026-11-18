@@ -2,12 +2,15 @@ import { devices, Page as PlaywrightPage, TestInfo } from '@playwright/test';
 
 import { ELEMENT_WAIT_EXTRA_LONG_TIME, ELEMENT_WAIT_LONGER_TIME, ELEMENT_WAIT_TIME } from '../core/constants';
 import { elements as e } from '../core/elements';
-import { Page } from '../core/page';
+import { ClientSettingsOverrides, Page } from '../core/page';
 import { test } from '../core/setup/fixtures';
 import { answerPollOption, openPoll, startPoll } from '../polling/util';
+import { PRE_FLIGHT_CREATE_PARAMETER, PRE_FLIGHT_INIT_OPTIONS, refuseDevices } from '../pre-flight/util';
+import { EXTERNAL_VIDEO_URL, routeExternalVideo } from '../presentation/util';
+import { routeServerConnection, SHOW_RECONNECTING_TOAST } from '../reconnection/util';
 import { startScreenshare } from '../screenshare/util';
 import { MultiUsers } from '../user/multiusers';
-import { openLockViewers } from '../user/util';
+import { openLockViewers, setGuestPolicyOption, setPresentationPermission } from '../user/util';
 import { findNonTextContrastViolations } from './nonTextContrast';
 import { clearAnnouncements, ensureAnnouncementRecorder, installAnnouncementRecorder } from './wcagAuditAnnouncements';
 import {
@@ -42,13 +45,29 @@ import {
 const SCENARIO_TIMEOUT = 15 * 60 * 1000;
 const ANNOUNCEMENT_WAIT_MS = 2000;
 const BREAKOUT_IDLE_MS = 30000;
+const ROOM_LOAD_TIMEOUT = 3 * ELEMENT_WAIT_EXTRA_LONG_TIME;
 const ACCEPT_GUEST = '[data-test="acceptGuest"]';
 const PRIVATE_MESSAGE_GUEST = '[data-test="privateMessageGuest"]';
 const PRIVATE_LOBBY_MESSAGE = '[data-test="privateLobbyMessage"]';
 const TIME_REMAINING = '[data-test="timeRemaining"]';
+// The recording controls (and their confirmation) only exist in meetings created to be recorded.
+const RECORDED_MEETING = 'record=true';
+// Moderators can only ask an attendee to share the camera in meetings created with this.
+const CAMERA_REQUESTS_ALLOWED = 'allowModsToRequestCameraShare=true';
+// Off by default in 4.1, but deployments turn it on: audit it too.
+const CHAT_EMOJI_PICKER_ON: ClientSettingsOverrides = { public: { chat: { emojiPicker: { enable: true } } } };
 const LIVE_REGION = '[aria-live]:not([aria-live="off"]),[role="status"],[role="alert"],[role="log"]';
 
 type Steps = Pick<StateOptions, 'enter' | 'leave'>;
+
+// Every tab of the settings modal after the first one, which opens with the modal.
+const SETTINGS_TABS = [
+  { id: 'settings-notifications', name: 'Notificações', trigger: e.notificationsTab },
+  { id: 'settings-data-saving', name: 'Economia de dados', trigger: e.dataSavingsTab },
+  { id: 'settings-audio', name: 'Áudio', trigger: e.audioTab },
+  { id: 'settings-shortcuts', name: 'Atalhos de teclado', trigger: e.shortcutsTab },
+  { id: 'settings-about', name: 'Sobre', trigger: e.aboutTabButton },
+];
 
 /** A menu, popover or modal: opened by clicking `trigger`, closed with Escape. */
 const opensWith = (user: Page, trigger: string): Steps => ({
@@ -176,8 +195,10 @@ async function auditJoiningAudio(rec: AuditRecorder, mod: Page) {
     name: 'Sala com áudio conectado',
     description: 'Estado principal da reunião, microfone conectado e mutado.',
     enter: async () => {
+      // Same sequence as Page.joinMicrophone: with LiveKit, establishing audio takes several seconds.
       await mod.waitAndClick(e.joinEchoTestButton);
-      await mod.hasElement(e.unmuteMicButton, 'should be in audio');
+      await mod.wasRemoved(e.establishingAudioLabel, 'should establish audio', ELEMENT_WAIT_LONGER_TIME);
+      await mod.hasElement(e.unmuteMicButton, 'should be in audio', ELEMENT_WAIT_LONGER_TIME);
     },
   });
 }
@@ -278,6 +299,77 @@ async function auditPeopleAndChat(rec: AuditRecorder, mod: Page) {
     description: 'Menu de opções do chat (salvar, copiar, limpar).',
     ...opensWith(mod, e.chatOptions),
   });
+  await rec.state(page, {
+    id: 'chat-emoji-picker',
+    name: 'Emojis no campo do chat',
+    description: 'Seletor de emoji aberto pelo botão ao lado do campo de mensagem.',
+    enter: () => mod.waitAndClick(e.emojiPickerButton),
+    leave: () => dismiss(mod),
+  });
+  await auditChatMessageActions(rec, mod);
+}
+
+/** Shows the toolbar of the last chat message, which only appears while the message is hovered. */
+async function hoverLastChatMessage(user: Page) {
+  const message = user.page.locator(e.chatMessageItem).last();
+  await message.hover();
+  await message.locator(e.messageToolbar).waitFor({ state: 'visible' });
+  return message;
+}
+
+/**
+ * Closes a popover so it does not cover the next states: Escape, then a click outside. The emoji
+ * pickers (emoji-mart) spend the first Escape leaving their search field; the reaction picker closes
+ * on a second one, the chat input picker did not close with Escape at all in 4.1 (to confirm by hand).
+ */
+async function dismiss(user: Page) {
+  await pressEscape(user.page);
+  await user.page.mouse.click(1, 1);
+}
+
+/** A chat message action: hover the last message, click one of its toolbar buttons. */
+const messageAction = (user: Page, button: string, opens?: string): Steps => ({
+  enter: async () => {
+    const message = await hoverLastChatMessage(user);
+    await message.locator(button).click();
+    if (opens) await user.hasElement(opens, `should open ${opens}`);
+  },
+  leave: () => dismiss(user),
+});
+
+async function auditChatMessageActions(rec: AuditRecorder, mod: Page) {
+  const { page } = mod;
+  await rec.state(page, {
+    id: 'chat-message-toolbar',
+    name: 'Ações de uma mensagem',
+    description: 'Barra de ações (reagir, responder, editar, fixar, apagar) ao passar sobre uma mensagem.',
+    enter: () => hoverLastChatMessage(mod),
+    leave: () => page.mouse.move(1, 1),
+  });
+  await rec.state(page, {
+    id: 'chat-react-picker',
+    name: 'Reagir a uma mensagem',
+    description: 'Seletor de reação aberto a partir de uma mensagem.',
+    ...messageAction(mod, e.reactMessageButton),
+  });
+  await rec.state(page, {
+    id: 'chat-reply',
+    name: 'Respondendo uma mensagem',
+    description: 'Campo do chat em modo de resposta, com a mensagem citada.',
+    ...messageAction(mod, e.replyMessageButton),
+  });
+  await rec.state(page, {
+    id: 'chat-pin-confirm',
+    name: 'Confirmar fixar mensagem',
+    description: 'Modal de confirmação para fixar uma mensagem no topo do chat.',
+    ...messageAction(mod, e.pinMessageButton, e.simpleModal),
+  });
+  await rec.state(page, {
+    id: 'chat-delete-confirm',
+    name: 'Confirmar apagar mensagem',
+    description: 'Modal de confirmação para apagar uma mensagem.',
+    ...messageAction(mod, e.deleteMessageButton, e.simpleModal),
+  });
 }
 
 async function auditSettingsAndTools(rec: AuditRecorder, mod: Page) {
@@ -290,13 +382,15 @@ async function auditSettingsAndTools(rec: AuditRecorder, mod: Page) {
   });
   // Inside an open modal: focus must stay in the dialog (and not escape to the page behind it).
   await rec.check('keyboard-settings-modal', () => checkKeyboard(page, 40), ['2.1', '2.4']);
-  await rec.state(page, {
-    id: 'settings-shortcuts',
-    name: 'Atalhos de teclado',
-    description: 'Aba de atalhos dentro das configurações.',
-    enter: () => mod.waitAndClick(e.shortcutsTab),
-    leave: () => mod.waitAndClick(e.saveSettingsButton),
-  });
+  for (const tab of SETTINGS_TABS) {
+    await rec.state(page, {
+      id: tab.id,
+      name: tab.name,
+      description: `Aba "${tab.name}" dentro das configurações.`,
+      enter: () => mod.waitAndClick(tab.trigger),
+    });
+  }
+  await pressEscape(page);
   await rec.state(page, {
     id: 'poll-create',
     name: 'Criar enquete',
@@ -327,7 +421,43 @@ async function auditSettingsAndTools(rec: AuditRecorder, mod: Page) {
       await mod.waitAndClick(e.sharedNotesSidebarButton);
       await mod.hasElement(e.sharedNotesBackground, 'should display shared notes');
     },
-    leave: () => mod.waitAndClick(e.sharedNotesSidebarButton),
+  });
+  await rec.state(page, {
+    id: 'notes-options',
+    name: 'Opções das notas',
+    description: 'Menu das notas compartilhadas (exportar, fixar no lugar da apresentação).',
+    ...opensWith(mod, e.notesOptions),
+  });
+  if (await mod.checkElement(e.sharedNotesBackground)) await mod.waitAndClick(e.sharedNotesSidebarButton);
+  await rec.state(page, {
+    id: 'apps-gallery',
+    name: 'Galeria de apps',
+    description: 'Painel com os apps disponíveis para a reunião.',
+    enter: async () => {
+      await mod.waitAndClick(e.appsGallerySidebarButton);
+      await mod.hasElement(e.appsGalleryTitle, 'should open the apps gallery');
+    },
+    leave: () => mod.waitAndClick(e.appsGallerySidebarButton),
+  });
+  await rec.state(page, {
+    id: 'layout-view',
+    name: 'Escolha de layout',
+    description: 'Painel de visualização do layout da reunião (só para moderadores).',
+    enter: async () => {
+      await mod.waitAndClick(e.layoutViewButton);
+      await mod.hasElement(e.layoutViewPanel, 'should open the layout view panel');
+    },
+    leave: () => pressEscape(page),
+  });
+  await rec.state(page, {
+    id: 'recording-confirm',
+    name: 'Confirmar gravação',
+    description: 'Confirmação mostrada ao clicar para iniciar a gravação.',
+    enter: async () => {
+      await mod.waitAndClick(e.recordingIndicator);
+      await mod.hasElement(e.confirmRecordingButton, 'should ask to confirm the recording');
+    },
+    leave: () => mod.waitAndClick(e.cancelRecordingButton),
   });
   await rec.state(page, {
     id: 'timer',
@@ -365,8 +495,24 @@ async function auditMediaAndSharing(rec: AuditRecorder, mod: Page) {
       await mod.waitAndClick(e.mediaAreaButton);
       await mod.waitAndClick(e.managePresentations);
     },
-    leave: () => pressEscape(page),
   });
+  await rec.state(page, {
+    id: 'presentation-download-menu',
+    name: 'Opções de download da apresentação',
+    description: 'Menu de download de uma apresentação, dentro do modal de apresentações.',
+    enter: () => mod.waitAndClick(e.presentationOptionsDownloadBtn),
+    leave: async () => {
+      await pressEscape(page);
+      await pressEscape(page);
+    },
+  });
+  await rec.state(page, {
+    id: 'presentation-menu',
+    name: 'Menu da apresentação',
+    description: 'Opções da apresentação (tela cheia, foto do slide, ajustar à largura).',
+    ...opensWith(mod, e.whiteboardOptionsButton),
+  });
+  await auditExternalVideo(rec, mod);
   await rec.state(page, {
     id: 'whiteboard-toolbar',
     name: 'Ferramentas do quadro branco',
@@ -398,6 +544,12 @@ async function auditMediaAndSharing(rec: AuditRecorder, mod: Page) {
     },
   });
   await rec.state(page, {
+    id: 'webcam-button-menu',
+    name: 'Menu do botão de câmera',
+    description: 'Menu ao lado do botão de câmera (configurações, fundo virtual).',
+    ...opensWith(mod, e.videoDropdownMenu),
+  });
+  await rec.state(page, {
     id: 'webcam-menu',
     name: 'Menu do vídeo',
     description: 'Menu de opções sobre o vídeo de um participante.',
@@ -413,6 +565,37 @@ async function auditMediaAndSharing(rec: AuditRecorder, mod: Page) {
     description: 'Sala com compartilhamento de tela ativo.',
     enter: () => startScreenshare(mod),
     leave: () => mod.waitAndClick(e.stopScreenSharing),
+  });
+}
+
+/** External video, served by the suite's stub so it does not depend on the internet. */
+async function auditExternalVideo(rec: AuditRecorder, mod: Page) {
+  const { page } = mod;
+  await routeExternalVideo(page.context());
+  await rec.state(page, {
+    id: 'external-video-modal',
+    name: 'Compartilhar vídeo externo',
+    description: 'Modal para colar o endereço de um vídeo externo.',
+    enter: async () => {
+      await mod.waitAndClick(e.mediaAreaButton);
+      await mod.waitAndClick(e.shareExternalVideoBtn);
+      await mod.hasElement(e.videoModalInput, 'should display the external video address field');
+    },
+  });
+  await rec.state(page, {
+    id: 'external-video-playing',
+    name: 'Vídeo externo tocando',
+    description: 'Sala com um vídeo externo compartilhado e o player aberto.',
+    enter: async () => {
+      await mod.page.locator(e.videoModalInput).first().fill(EXTERNAL_VIDEO_URL);
+      await mod.waitAndClick(e.startShareVideoBtn);
+      await pressEscape(page); // the media sharing menu stays open
+      await mod.hasElement(e.externalVideo, 'should display the external video', ELEMENT_WAIT_LONGER_TIME);
+    },
+    leave: async () => {
+      await mod.closeAllToastNotifications();
+      await mod.waitAndClick(e.stopExternalVideoBtn);
+    },
   });
 }
 
@@ -446,8 +629,117 @@ async function auditMeetingMenus(rec: AuditRecorder, mod: Page) {
     id: 'end-meeting',
     name: 'Confirmar encerramento',
     description: 'Modal de confirmação para encerrar a reunião para todos.',
-    ...opensWith(mod, e.endMeetingButton),
+    enter: () => mod.waitAndClick(e.endMeetingButton),
   });
+}
+
+/** Last step of a tour: the moderator ends the meeting and lands on the "meeting ended" screen. */
+async function auditMeetingEnded(rec: AuditRecorder, mod: Page) {
+  await rec.state(mod.page, {
+    id: 'meeting-ended',
+    name: 'Reunião encerrada',
+    description: 'Tela mostrada depois que o moderador encerra a reunião para todos.',
+    enter: async () => {
+      await mod.waitAndClick(e.confirmEndMeetingButton);
+      await mod.hasElement(e.meetingEndedModal, 'should display the meeting ended screen', ELEMENT_WAIT_LONGER_TIME);
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Moderator and attendee, in steps
+// ---------------------------------------------------------------------------------------------
+
+/** Opens the options menu of the attendee's row in the moderator's user list. */
+async function openAttendeeMenu(mod: Page) {
+  await openUserList(mod);
+  await mod.waitAndClick(e.otherUserMoreOptionsButton);
+}
+
+async function auditModeratingAttendee(rec: AuditRecorder, mod: Page, att: Page) {
+  await rec.state(mod.page, {
+    id: 'mod-attendee-menu',
+    name: 'Menu de um participante (moderador)',
+    description: 'Opções do moderador sobre outro participante (apresentador, promover, câmera, remover).',
+    actor: 'moderator',
+    enter: () => openAttendeeMenu(mod),
+    leave: () => pressEscape(mod.page),
+  });
+  await rec.state(att.page, {
+    id: 'attendee-camera-request',
+    name: 'Pedido para ligar a câmera (participante)',
+    description: 'Pedido do moderador para o participante compartilhar a câmera.',
+    actor: 'attendee',
+    enter: async () => {
+      await openAttendeeMenu(mod);
+      // Every row renders its own copy of the menu; only the open one is visible.
+      await mod.page.locator(`${e.requestUserCamera}:visible`).first().click();
+      await att.hasElement(
+        e.confirmShareCamera,
+        'should ask the attendee to share the camera',
+        ELEMENT_WAIT_LONGER_TIME,
+      );
+    },
+    leave: () => att.waitAndClick(e.denyShareCamera),
+  });
+}
+
+/** With presenter requests needing approval: the attendee asks to present and the moderator decides. */
+async function auditPresenterRequest(rec: AuditRecorder, mod: Page, att: Page) {
+  try {
+    await setPresentationPermission(mod, e.presRequireApproval);
+  } catch (err) {
+    rec.note('presenterRequestSetupError', errorMessage(err));
+  }
+  await rec.state(att.page, {
+    id: 'attendee-request-presenter',
+    name: 'Pedir para apresentar (participante)',
+    description: 'Menu de mídia do participante com a opção de pedir para ser apresentador.',
+    actor: 'attendee',
+    enter: async () => {
+      await att.waitAndClick(e.mediaAreaButton);
+      await att.hasElement(e.requestPresenterButton, 'should offer to request the presenter role');
+    },
+    leave: () => att.waitAndClick(e.requestPresenterButton),
+  });
+  await rec.state(mod.page, {
+    id: 'mod-presenter-request',
+    name: 'Pedido de apresentador (moderador)',
+    description: 'Pedido do participante para apresentar, com aprovar e recusar.',
+    actor: 'moderator',
+    enter: () => mod.hasElement(e.approvePresenter, 'should show the presenter request', ELEMENT_WAIT_LONGER_TIME),
+    leave: () => mod.waitAndClick(e.denyPresenter),
+  });
+}
+
+/** The moderator removes the attendee: the confirmation, the attendee's screen and what the moderator hears. */
+async function auditAttendeeRemoved(rec: AuditRecorder, mod: Page, att: Page) {
+  await rec.state(mod.page, {
+    id: 'remove-user-confirm',
+    name: 'Confirmar remoção (moderador)',
+    description: 'Modal de confirmação para remover um participante da sala.',
+    actor: 'moderator',
+    enter: async () => {
+      await openUserList(mod);
+      await mod.page.locator(e.otherUserMoreOptionsButton).first().click();
+      // Every row renders its own copy of the menu; only the open one is visible.
+      await mod.page.locator(`${e.removeUser}:visible`).first().click();
+      await mod.hasElement(e.removeUserConfirmationBtn, 'should ask to confirm the removal');
+    },
+  });
+  await clearAnnouncements(mod.page);
+  await rec.state(att.page, {
+    id: 'attendee-removed',
+    name: 'Removido da sala (participante)',
+    description: 'Tela mostrada ao participante que foi removido pelo moderador.',
+    actor: 'attendee',
+    enter: async () => {
+      await mod.waitAndClick(e.removeUserConfirmationBtn);
+      await att.hasElement(e.meetingEndedModal, 'should tell the attendee they were removed', ELEMENT_WAIT_LONGER_TIME);
+    },
+  });
+  await mod.page.waitForTimeout(ANNOUNCEMENT_WAIT_MS);
+  await rec.collectAnnouncements(mod.page, 'moderador: participante removido da sala');
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -460,13 +752,18 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
       id: 'moderator',
       name: 'Moderador sozinho na sala',
       description:
-        'Um moderador entra, conecta o áudio e percorre todos os painéis, menus e modais disponíveis para ele: lista de usuários, chat, configurações, enquete, breakout, notas, timer, reações, webcam, compartilhamento de tela, quadro branco e saída da reunião.',
+        'Um moderador entra numa reunião gravável, conecta o áudio e percorre todos os painéis, menus e modais disponíveis para ele: lista de usuários, chat e as ações de mensagem, todas as abas das configurações, enquete, breakout, notas, galeria de apps, layout, gravação, timer, reações, apresentação, vídeo externo, webcam, compartilhamento de tela, quadro branco e, por fim, encerra a reunião.',
       actors: ['moderator'],
     };
     await auditScenario(testInfo, scenario, async (rec) => {
       await installAnnouncementRecorder(context);
       const mod = new Page(browser, page, testInfo);
-      await mod.init(true, { testInfo, shouldCloseAudioModal: false });
+      await mod.init(true, {
+        testInfo,
+        shouldCloseAudioModal: false,
+        createParameter: RECORDED_MEETING,
+        clientSettingsOverrides: CHAT_EMOJI_PICKER_ON,
+      });
       await noteAuditedServer(rec, mod);
 
       await auditJoiningAudio(rec, mod);
@@ -477,6 +774,7 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
       await auditMediaAndSharing(rec, mod);
       await auditMeetingMenus(rec, mod);
       await rec.collectAnnouncements(mod.page, 'moderador');
+      await auditMeetingEnded(rec, mod);
     });
   });
 
@@ -491,7 +789,7 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
     await auditScenario(testInfo, scenario, async (rec) => {
       await installAnnouncementRecorder(context);
       const users = new MultiUsers(browser, context);
-      await users.initModPage(page, { testInfo });
+      await users.initModPage(page, { testInfo, createParameter: CAMERA_REQUESTS_ALLOWED });
       const mod = users.modPage;
       await openPublicChat(mod);
       await clearAnnouncements(mod.page);
@@ -592,15 +890,19 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
           description: 'Tela do participante após receber uma mensagem privada.',
           actor: 'attendee',
         });
+        await rec.state(mod.page, {
+          id: 'mod-private-chat',
+          name: 'Chat privado (moderador)',
+          description: 'Conversa privada aberta do lado do moderador.',
+          actor: 'moderator',
+        });
       } catch (err) {
         rec.note('privateChatError', String(err).slice(0, 300));
       }
 
-      // Attendee leaves
-      await clearAnnouncements(mod.page);
-      await att.page.close();
-      await mod.page.waitForTimeout(3000);
-      await rec.collectAnnouncements(mod.page, 'moderador: participante saiu da sala');
+      await auditModeratingAttendee(rec, mod, att);
+      await auditPresenterRequest(rec, mod, att);
+      await auditAttendeeRemoved(rec, mod, att);
     });
   });
 
@@ -640,18 +942,15 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
       await att.waitAndClick(e.modalConfirmButton);
       const room = (await roomTab) || att.page;
       await room.waitForLoadState('domcontentloaded');
-      await room.locator(e.presentationTitle).waitFor({ state: 'visible', timeout: ELEMENT_WAIT_EXTRA_LONG_TIME });
-      if (
-        await room
-          .locator(e.audioModal)
-          .isVisible()
-          .catch(() => false)
-      ) {
-        await room
-          .locator(e.closeModal)
-          .click()
-          .catch(() => undefined);
-      }
+      // The room is a whole new client loading in a tab: on a remote server it takes well over the
+      // usual wait. It opens on its audio modal, or straight on the meeting (the actions bar renders
+      // with or without a presentation). The audio modal is closed so the room itself gets audited.
+      const audioModal = `${e.audioModal}:visible, ${e.audioSettingsModal}:visible`;
+      await room
+        .locator(`${audioModal}, ${e.actionsBarBackground}:visible`)
+        .first()
+        .waitFor({ timeout: ROOM_LOAD_TIMEOUT });
+      if (await room.locator(audioModal).count()) await room.locator(e.closeModal).first().click();
       await rec.state(room, {
         id: 'attendee-in-room',
         name: 'Dentro da sala de grupo (participante)',
@@ -664,6 +963,13 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
         description: 'Painel do moderador com a sala de grupo rodando.',
         actor: 'moderator',
         enter: () => mod.hasElement(e.roomOptions1, 'rooms should be running'),
+      });
+      await rec.state(mod.page, {
+        id: 'mod-room-menu',
+        name: 'Opções de uma sala (moderador)',
+        description: 'Menu de uma sala de grupo em andamento (entrar, mandar mensagem, encerrar).',
+        actor: 'moderator',
+        ...opensWith(mod, e.roomOptions1),
       });
 
       // Idle period: is the countdown announced, and how often?
@@ -785,6 +1091,128 @@ test.describe('WCAG audit', { tag: '@a11y-audit' }, () => {
         enter: () => guest.hasElement(e.audioModal, 'guest should reach the audio modal'),
       });
       await rec.collectAnnouncements(guest.page, 'convidado: aprovado e entrou');
+    });
+  });
+
+  test('pre-flight: setup screen before joining', async ({ browser, context, page }, testInfo) => {
+    const scenario: ScenarioInfo = {
+      id: 'pre-flight',
+      name: 'Tela de entrada (pre-flight)',
+      description:
+        'Tela da 4.1 que aparece antes de entrar na sala (ligada por sessão com o pre-flight): dados da sessão, áudio, câmera e configurações. Também a tela de permissão quando o navegador recusa o microfone, e a sala de espera e a recusa de um participante que precisa de aprovação.',
+      actors: ['attendee', 'moderator'],
+    };
+    await auditScenario(testInfo, scenario, async (rec) => {
+      await installAnnouncementRecorder(context);
+      const users = new MultiUsers(browser, context);
+      await users.initModPage(page, { testInfo, createParameter: PRE_FLIGHT_CREATE_PARAMETER });
+      const mod = users.modPage;
+
+      /** Opens a new tab that joins as an attendee and stops on the pre-flight screen. */
+      const openPreFlight = async (fullName: string, prepare?: (tab: PlaywrightPage) => Promise<unknown>) => {
+        const tab = await context.newPage();
+        if (prepare) await prepare(tab);
+        const user = new Page(browser, tab, testInfo);
+        await user.init(false, { fullName, meetingId: mod.meetingId, ...PRE_FLIGHT_INIT_OPTIONS });
+        await user.hasElement(e.preFlight, 'should display the pre-flight screen', ELEMENT_WAIT_EXTRA_LONG_TIME);
+        return user;
+      };
+
+      const att = await openPreFlight('Attendee');
+      await rec.state(att.page, {
+        id: 'pre-flight',
+        name: 'Tela de entrada',
+        description: 'Antes de entrar: nome da sessão, microfone, alto-falante, câmera e botão de entrar.',
+      });
+      await standardChecks(rec, att.page, 'pre-flight-');
+      await rec.state(att.page, {
+        id: 'pre-flight-settings',
+        name: 'Configurações antes de entrar',
+        description: 'Modal de configurações (idioma, tamanho da fonte, tema) aberto na tela de entrada.',
+        ...opensWith(att, e.preFlightSettingsButton),
+      });
+      await rec.state(att.page, {
+        id: 'pre-flight-camera-on',
+        name: 'Câmera ligada antes de entrar',
+        description: 'Tela de entrada com a câmera ligada, a prévia e os seletores de câmera e qualidade.',
+        enter: async () => {
+          await att.waitAndClick(e.preFlightCameraToggle);
+          await att.hasElement(e.preFlightCameraDevice, 'should show the camera selector', ELEMENT_WAIT_LONGER_TIME);
+        },
+        leave: () => att.waitAndClick(e.preFlightCameraToggle),
+      });
+      await att.page.close();
+
+      const refused = await openPreFlight('Attendee 2', (tab) =>
+        tab.addInitScript(refuseDevices, { audio: true, video: false }),
+      );
+      await rec.state(refused.page, {
+        id: 'pre-flight-device-permission',
+        name: 'Microfone bloqueado pelo navegador',
+        description: 'Tela de entrada quando o navegador recusa o acesso ao microfone.',
+        enter: () =>
+          refused.hasElement(
+            e.preFlightDevicePermission,
+            'should explain the refused device',
+            ELEMENT_WAIT_LONGER_TIME,
+          ),
+      });
+      await refused.page.close();
+
+      await setGuestPolicyOption(mod, e.askModerator);
+      await mod.page.waitForTimeout(ANNOUNCEMENT_WAIT_MS); // the policy has to reach the server first
+      const waiting = await openPreFlight('Attendee 3');
+      await rec.state(waiting.page, {
+        id: 'pre-flight-guest-lobby',
+        name: 'Aguardando aprovação na tela de entrada',
+        description: 'Tela de entrada enquanto o moderador ainda não aprovou a entrada.',
+        enter: () => waiting.hasElement(e.guestMessage, 'should say the attendee is waiting'),
+      });
+      await rec.collectAnnouncements(waiting.page, 'participante aguardando aprovação na tela de entrada');
+      await rec.state(waiting.page, {
+        id: 'pre-flight-guest-denied',
+        name: 'Entrada recusada',
+        description: 'Tela de entrada depois que o moderador recusa a entrada.',
+        enter: async () => {
+          await mod.waitAndClick(e.authenticatedWaitingUsers);
+          await mod.waitAndClick(e.denyAllAuthenticatedWaiting);
+          await waiting.hasElement(e.preFlightGuestDenied, 'should show the denial', ELEMENT_WAIT_LONGER_TIME);
+        },
+      });
+      await waiting.page.waitForTimeout(ANNOUNCEMENT_WAIT_MS);
+      await rec.collectAnnouncements(waiting.page, 'participante: entrada recusada');
+    });
+  });
+
+  test('connection: lost and reconnecting', async ({ browser, page }, testInfo) => {
+    skipUnlessTopic('4.1', '1.3', '1.4', '2.2', '3.3');
+    const scenario: ScenarioInfo = {
+      id: 'connection',
+      name: 'Conexão perdida',
+      description:
+        'A conexão com o servidor cai (derrubada pelo próprio navegador) e o cliente tenta reconectar. Audita o aviso de reconexão, o que fica desabilitado e o que é anunciado ao leitor de tela.',
+      actors: ['moderator'],
+    };
+    await auditScenario(testInfo, scenario, async (rec) => {
+      const connection = await routeServerConnection(page);
+      const mod = new Page(browser, page, testInfo);
+      await mod.init(true, { testInfo, clientSettingsOverrides: SHOW_RECONNECTING_TOAST });
+      await ensureAnnouncementRecorder(page);
+      await openPublicChat(mod);
+      await clearAnnouncements(page);
+      await rec.state(page, {
+        id: 'reconnecting',
+        name: 'Reconectando',
+        description: 'Sala logo depois de a conexão cair, com o aviso de reconexão em andamento.',
+        enter: async () => {
+          connection.drop();
+          await mod.hasElement(e.reconnectingToast, 'should say it is reconnecting');
+        },
+      });
+      await rec.collectAnnouncements(page, 'moderador: conexão caiu');
+      await mod.wasRemoved(e.reconnectingToast, 'should reconnect', ELEMENT_WAIT_EXTRA_LONG_TIME * 2);
+      await page.waitForTimeout(ANNOUNCEMENT_WAIT_MS);
+      await rec.collectAnnouncements(page, 'moderador: conexão restabelecida');
     });
   });
 

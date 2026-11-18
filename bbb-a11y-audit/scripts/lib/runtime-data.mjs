@@ -7,7 +7,17 @@ import { join } from 'node:path';
 
 import { isWcagCriterion } from './wcag.mjs';
 
-const SCENARIO_ORDER = ['moderator', 'interactions', 'breakout', 'guest', 'locale-pt-br', 'dark-theme', 'mobile'];
+const SCENARIO_ORDER = [
+  'moderator',
+  'interactions',
+  'breakout',
+  'guest',
+  'pre-flight',
+  'connection',
+  'locale-pt-br',
+  'dark-theme',
+  'mobile',
+];
 const MAX_CHECK_ERROR = 300;
 
 // axe tags carry the criterion they test: wcag143 is 1.4.3, wcag1410 is 1.4.10.
