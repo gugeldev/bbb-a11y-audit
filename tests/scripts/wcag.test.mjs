@@ -41,9 +41,13 @@ describe('wcag', () => {
     assert.deepEqual(CRITERIA.filter(criterion), ['2.4.7']);
   });
 
-  it('gives runs of the same topic the same key, whatever the order', () => {
+  it('gives runs that cover the same criteria the same key, however the topic was asked', () => {
     assert.equal(topicKey({ guidelines: ['2.4', '2.1'] }), topicKey({ guidelines: ['2.1', '2.4'] }));
-    assert.equal(topicKey({ criteria: ['2.4.7'] }), 'c:2.4.7');
+    assert.equal(topicKey({ guidelines: ['4'] }), topicKey({ guidelines: ['4.1'] }));
+    assert.equal(topicKey({ criteria: ['4.1.3', '4.1.2'] }), topicKey({ guidelines: ['4.1'] }));
+    assert.equal(topicKey({ criteria: ['2.4.7'] }), '2.4.7');
+    assert.notEqual(topicKey({ guidelines: ['2.4'] }), topicKey({ guidelines: ['2.1'] }));
     assert.equal(topicKey(undefined), 'full');
+    assert.equal(topicKey({ guidelines: ['1', '2', '3', '4'] }), 'full');
   });
 });

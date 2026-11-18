@@ -3,6 +3,8 @@ import { Page as PlaywrightPage } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
+import { waitForAlertQueue } from './wcagAuditAnnouncements';
+
 /**
  * Recording side of the runtime layer of the bbb-a11y-audit agent skill (used by wcagAudit.spec.ts).
  *
@@ -312,6 +314,7 @@ export class AuditRecorder {
 
   /** Pulls the live-region log recorded on `page` since the last call, attributed to `actor`. */
   async collectAnnouncements(page: PlaywrightPage, actor: string) {
+    await waitForAlertQueue(page);
     const base = { t: Date.now(), actor, politeness: 'none', text: '', region: '', regionCreatedWithMessage: false };
     const read = await page
       .evaluate(() => {

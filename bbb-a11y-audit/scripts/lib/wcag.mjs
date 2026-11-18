@@ -38,9 +38,12 @@ export function criteriaFilter({ criteria, guidelines } = {}) {
     (!guidelines || guidelines.some((g) => criterion.startsWith(`${g}.`)));
 }
 
-/** Key that identifies a run's topic, so runs are compared only with runs of the same topic. */
+/**
+ * Key that identifies a run's topic by the criteria it covers, so runs are compared only with
+ * runs of the same topic however it was asked: "principio 4" and "diretriz 4.1" both cover 4.1.2
+ * and 4.1.3. A topic that covers every criterion is "full".
+ */
 export function topicKey(meta) {
-  if (meta?.guidelines?.length) return `g:${[...meta.guidelines].sort().join(',')}`;
-  if (meta?.criteria?.length) return `c:${[...meta.criteria].sort().join(',')}`;
-  return 'full';
+  const covered = CRITERIA.filter(criteriaFilter(meta || {}));
+  return covered.length === CRITERIA.length ? 'full' : covered.join(',');
 }

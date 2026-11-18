@@ -27,8 +27,8 @@
     },
     {
       "id": "4.1.2-f",
-      "text": "Composite widgets are complete and consistent: tablist/tab/tabpanel, menu/menuitem, listbox/option, combobox/listbox, grid; aria-controls, aria-labelledby, aria-describedby and aria-activedescendant point to ids that exist.",
-      "label": "Componentes compostos (abas, menus, listas, combobox) estão completos e referências por id existem"
+      "text": "Composite widgets are complete and consistent: tablist/tab/tabpanel, menu/menuitem, listbox/option, combobox/listbox, grid. References that carry the name or the state point to ids that exist: aria-labelledby (the name) and aria-activedescendant (the current item). A dangling aria-describedby or aria-controls alone does not fail 4.1.2: list it in discarded as best practice.",
+      "label": "Componentes compostos (abas, menus, listas, combobox) estão completos e as referências que dão nome ou estado existem"
     },
     {
       "id": "4.1.2-g",

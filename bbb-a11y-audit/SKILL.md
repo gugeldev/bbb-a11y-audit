@@ -32,9 +32,9 @@ The normal way to work is **one topic at a time**: pick a guideline, audit every
 
 If the request is ambiguous, pick the closest mode and say which one you used. Do not ask.
 
-Create the run directory at the repo root: `a11y-reports/<YYYY-MM-DD_HHMM>[_<topic>]/raw/`, e.g. `2026-11-20_1430_d2.1` or `2026-11-20_1500_full`. It must start with the date and time: the report compares against older runs **of the same topic** (or, the first time, against the latest full run restricted to the topic). `a11y-reports/` is git-ignored.
+Create the run directory at the repo root: `a11y-reports/<YYYY-MM-DD_HHMM>[_<topic>]/raw/`, e.g. `2026-11-20_1430_d2.1` or `2026-11-20_1500_full`. It must start with the date and time: the report compares against older runs **of the same topic**, meaning the same criteria however they were asked (`principio 4` and `diretriz 4.1` are the same topic), or, the first time, against the latest full run restricted to the topic. The audit must leave no trace in the repository: if `git check-ignore -q a11y-reports/` fails, add `a11y-reports/` to `.git/info/exclude` (local to this clone, never to `.gitignore`).
 
-In `guideline` and `criterion` modes set `meta.guidelines` / `meta.criteria` in findings.input.json, and in every layer look only at what can inform the topic (each step below says how). Criteria outside the topic are left out automatically.
+In `guideline` and `criterion` modes set `meta.guidelines` / `meta.criteria` in findings.input.json (a principle is a guideline entry of one digit: `principio 2` is `"guidelines": ["2"]`), and in every layer look only at what can inform the topic (each step below says how). Criteria outside the topic are left out automatically.
 
 ## Consistency rules (read before auditing)
 

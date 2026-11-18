@@ -109,7 +109,7 @@ function printSummary({ runDir, output, runtime, comparison, issues }) {
         .join(', ')}`,
       `runtime: ${runtime.scenarios.length} scenarios, ${runtime.states.size} states, ${Object.keys(runtime.shots).length} screenshots embedded`,
       previous
-        ? `vs ${previous.name}: ${count((f) => f.status === 'new')} new, ${count((f) => f.status === 'regressed')} regressed, ${fixed.length} fixed, ${notRechecked.length} not re-checked`
+        ? `vs ${previous.name}: ${count((f) => f.status === 'new')} new, ${count((f) => f.status === 'persisting')} persisting, ${count((f) => f.status === 'regressed')} regressed, ${fixed.length} fixed, ${notRechecked.length} not re-checked`
         : 'first run: nothing to compare with',
     ].join('\n'),
   );

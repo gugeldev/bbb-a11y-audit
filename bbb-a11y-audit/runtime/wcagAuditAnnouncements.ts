@@ -115,8 +115,28 @@ export async function ensureAnnouncementRecorder(page: PlaywrightPage) {
   return installed;
 }
 
+// The client's global announcer (screenreader-alert) shows queued messages one at a time in this
+// region, each for 15 s, so the messages of one interaction can keep arriving long after it.
+const GLOBAL_ANNOUNCER = '#aria-polite-alert';
+const ALERT_QUEUE_TIMEOUT = 60000;
+
+/**
+ * Waits until the global announcer has nothing left to say (its region is empty), so a moment's
+ * messages are collected with that moment instead of leaking into the next one or being cleared.
+ * Gives up after a minute: a message that never leaves is still recorded, just later.
+ */
+export async function waitForAlertQueue(page: PlaywrightPage) {
+  await page
+    .waitForFunction((region) => !document.querySelector(region)?.textContent?.trim(), GLOBAL_ANNOUNCER, {
+      timeout: ALERT_QUEUE_TIMEOUT,
+      polling: 500,
+    })
+    .catch(() => undefined);
+}
+
 /** Drops what was recorded on `page` so far (setup noise before an interaction). */
 export async function clearAnnouncements(page: PlaywrightPage) {
+  await waitForAlertQueue(page);
   await page
     .evaluate(() => {
       (window as unknown as { a11yAuditLog?: unknown[] }).a11yAuditLog = [];

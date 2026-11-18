@@ -32,7 +32,7 @@ describe('build-report', () => {
       assert.equal(run.status, 0, run.stderr);
       assert.match(run.stdout, /findings: 6 \(this phase 3, backlog 3\)/);
       assert.match(run.stdout, /coverage: skip 53, fail 2/);
-      assert.match(run.stdout, /vs 2026-01-01_1000_d4\.1: 4 new, 1 regressed, 1 fixed, 1 not re-checked/);
+      assert.match(run.stdout, /vs 2026-01-01_1000_d4\.1: 4 new, 1 persisting, 1 regressed, 1 fixed, 1 not re-checked/);
     });
 
     it('warns about screenshot markers that found nothing, without failing', () => {
@@ -103,7 +103,7 @@ describe('build-report', () => {
       assert.equal(status('Voltou depois de corrigido'), 'regressed');
       assert.equal(status('Preferências do usuário'), 'new');
       assert.equal(output.meta.previousRunDir, '2026-01-01_1000_d4.1');
-      assert.equal(output.meta.previousRunScope, 'g:4.1');
+      assert.equal(output.meta.previousRunScope, '4.1.2,4.1.3');
     });
 
     it('calls a gone finding fixed only when the layer that found it ran again', () => {

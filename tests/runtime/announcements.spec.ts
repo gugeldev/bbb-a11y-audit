@@ -5,6 +5,7 @@ import {
   clearAnnouncements,
   ensureAnnouncementRecorder,
   installAnnouncementRecorder,
+  waitForAlertQueue,
 } from '../../bbb-a11y-audit/runtime/wcagAuditAnnouncements';
 
 type Logged = { t: number; [key: string]: unknown };
@@ -111,4 +112,16 @@ test('can be installed into a page that is already loaded', async ({ browser }) 
   await change(page, () => (document.getElementById('s')!.textContent = 'Late'));
   expect((await drain(page)).map((item) => item.text)).toEqual(['Late']);
   await page.close();
+});
+
+test('waits for the client announcer to finish its queue before collecting', async ({ page }) => {
+  // Like screenreader-alert: one message stays in #aria-polite-alert, then the region empties.
+  await page.evaluate(() => {
+    document.body.insertAdjacentHTML('beforeend', '<div id="aria-polite-alert" aria-live="polite">Queued</div>');
+    setTimeout(() => (document.getElementById('aria-polite-alert')!.textContent = ''), 1500);
+  });
+  const started = Date.now();
+  await waitForAlertQueue(page);
+  expect(Date.now() - started).toBeGreaterThanOrEqual(1000);
+  expect(await page.locator('#aria-polite-alert').textContent()).toBe('');
 });
