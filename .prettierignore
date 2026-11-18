@@ -1,0 +1,2 @@
+# Inputs written on purpose with the patterns the scanner looks for; line numbers are asserted.
+tests/fixtures/

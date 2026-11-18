@@ -56,7 +56,7 @@ In `bigbluebutton-tests/playwright/accessibility/`:
 
 ## Setting up the runtime layer
 
-The runtime layer lives in the skill (`runtime/wcagAudit.spec.ts` and `runtime/wcagAuditRecorder.ts`) and runs inside the BigBlueButton Playwright suite, because it uses that suite's helpers (`core/page`, `user/multiusers`, `core/elements`, polling and screenshare utils).
+The runtime layer lives in the skill (`runtime/*.ts`: the spec plus its recorder, checks and announcement recorder) and runs inside the BigBlueButton Playwright suite, because it uses that suite's helpers (`core/page`, `user/multiusers`, `core/elements`, polling and screenshare utils). It targets the 4.1 client (`v4.1.x-develop`) and only imports helpers that exist there.
 
 1. Find the suite: `bigbluebutton-tests/playwright/` at the repo root (it has `playwright.config.ts` and `core/`). If it does not exist, the runtime layer cannot run; record why.
 2. Compare `$SKILL/runtime/*.ts` with `bigbluebutton-tests/playwright/accessibility/` (`cmp`). If they are missing or differ, copy the skill's files there (the skill's copy is the source of truth).

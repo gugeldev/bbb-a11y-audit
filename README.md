@@ -38,3 +38,28 @@ full              # all 55 criteria, as an overview to choose the next topic
 A topic run only checks and reports that topic, and it compares against the last run of the same topic, so you can see what was fixed. Every criterion ends up failing, passing, not applicable, or, only where a person is truly needed, waiting for a human check with a ready-made script. The report also says whether each criterion was checked by a tool, by the agent, or by a person.
 
 Reports go to `a11y-reports/<date>_<time>_<topic>/report.html`.
+
+## What runs where
+
+| Step | Runs | Where | Code |
+| --- | --- | --- | --- |
+| Static scan | Node, regex over the source | your checkout | `scripts/static-scan.mjs`, patterns in `scripts/lib/static-patterns.mjs` |
+| eslint jsx-a11y | eslint 8, cached in `~/.cache/a11y-audit-eslint` | your checkout | `scripts/eslint-a11y.sh` |
+| Runtime | Playwright (Chromium) + axe-core against a live meeting | the BigBlueButton test suite, `bigbluebutton-tests/playwright/accessibility/` (copied there on first run) | `runtime/*.ts` |
+| Triage, review, coverage | the agent | the conversation | `SKILL.md` and `references/` |
+| Validation and report | Node | your checkout | `scripts/build-report.mjs`, modules in `scripts/lib/` |
+
+The tools only produce candidates and data; the agent decides what is a finding. `build-report.mjs` then rejects any finding whose file, line or quoted code does not exist, and any criterion of the topic left undecided.
+
+## Development
+
+The skill has no dependencies. This repository has dev tooling only:
+
+```bash
+npm install
+npx playwright install chrome   # once, for the runtime tests
+npm test                        # scripts (node:test) and runtime helpers (Playwright, no BBB server needed)
+npm run format:check            # Prettier, same config as the BigBlueButton test suite
+```
+
+The runtime spec imports helpers from the BigBlueButton suite, so type-check it there (`npm run typecheck` in `bigbluebutton-tests/playwright/` after copying `runtime/*.ts` into `accessibility/`). It targets `v4.1.x-develop`.

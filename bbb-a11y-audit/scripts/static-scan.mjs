@@ -1,191 +1,144 @@
 #!/usr/bin/env node
 /**
- * Pattern scan for accessibility anti-patterns. Prints CANDIDATES as JSON: every hit must be
- * triaged by reading the code (see references/static-patterns.md) before it becomes a finding.
+ * Static layer: searches the code for accessibility anti-patterns and prints the CANDIDATES as
+ * JSON. A candidate is not a finding: the agent reads the code around it and decides.
  *
  *   node static-scan.mjs [--guidelines=2.1,2.4] <path> [<path> ...] > raw/static.json
  *
- * --guidelines limits the scan to patterns of those guidelines (or principles "2", or criteria "2.4.7").
- *
- * No dependencies. Skips node_modules, tests, build output and locale files.
+ * --guidelines keeps only the patterns that can inform those guidelines (or a principle "2", or a
+ * criterion "2.4.7"). No dependencies. Skips node_modules, tests, build output and locale files.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
 
-const CODE = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs']);
-const STYLE = new Set(['.css', '.scss', '.less']);
-const MARKUP = new Set(['.html']);
-const SKIP_DIR = /(^|\/)(node_modules|dist|build|coverage|\.git|tests?|__tests__|__mocks__|locales|compatibility)(\/|$)/;
-const SKIP_FILE = /(\.spec\.|\.test\.|\.min\.|\.d\.ts$)/;
+import { PATTERNS } from './lib/static-patterns.mjs';
+import { matchesTopic } from './lib/wcag.mjs';
 
-/**
- * kinds: which file types the pattern runs on. Regexes run over the whole file (so JSX that spans
- * lines is matched) and the line number is computed from the match offset.
- */
-const PATTERNS = [
-  {
-    id: 'outline-none',
-    criterion: '2.4.7',
-    kinds: ['code', 'style'],
-    re: /outline\s*:\s*(?:none|0)\b[^;\n]*/g,
-    hint: 'Removes the focus outline. Fine only if the same rule (or :focus-visible) adds another visible indicator.',
-  },
-  {
-    id: 'positive-tabindex',
-    criterion: '2.4.3',
-    kinds: ['code', 'markup'],
-    re: /tab[iI]ndex\s*=\s*\{?\s*["']?\s*[1-9]\d*/g,
-    hint: 'tabindex > 0 overrides the natural focus order.',
-  },
-  {
-    id: 'paste-blocked',
-    criterion: '3.3.8',
-    kinds: ['code'],
-    re: /onPaste\s*=\s*\{[\s\S]{0,200}?preventDefault|addEventListener\(\s*['"]paste['"][\s\S]{0,200}?preventDefault/g,
-    hint: 'Blocking paste breaks password managers and copying codes (Accessible Authentication).',
-  },
-  {
-    id: 'conditional-live-region',
-    criterion: '4.1.3',
-    kinds: ['code'],
-    re: /(?:&&|\?)\s*\(?\s*<[A-Za-z][\w.]*\b[^>]*?(?:role\s*=\s*\{?["'](?:status|alert|log)["']|aria-live\s*=)/g,
-    hint: 'Live region mounted together with its message. Many screen readers only announce changes to a region that already existed.',
-  },
-  {
-    id: 'static-element-click',
-    criterion: '4.1.2',
-    also: ['2.1.1'],
-    kinds: ['code'],
-    re: /<(?:div|span|li|p|img|section|svg|td|tr)\b(?=[^>]*\bonClick\s*=)(?![^>]*\brole\s*=)[^>]*>/g,
-    hint: 'Clickable non-interactive element without role. Check keyboard support (2.1.1) and name/role (4.1.2). Arrow functions can cut the match short: read the real tag.',
-  },
-  {
-    id: 'aria-label-literal-with-text',
-    criterion: '2.5.3',
-    kinds: ['code', 'markup'],
-    re: /<(?:button|a)\b[^>]*\baria-label\s*=\s*\{?["'`]([^"'`]+)["'`]\}?[^>]*>\s*([A-Za-zÀ-ÿ][^<{]{1,60})</g,
-    hint: 'Literal aria-label next to visible text: the accessible name must contain the visible label.',
-  },
-  {
-    id: 'placeholder-as-label',
-    criterion: '3.3.2',
-    also: ['1.3.1', '4.1.2'],
-    kinds: ['code', 'markup'],
-    re: /<(?:input|textarea)\b(?=[^>]*\bplaceholder\s*=)(?![^>]*\b(?:aria-label|aria-labelledby|id)\s*=)[^>]*>/g,
-    hint: 'Field with placeholder and no aria-label, aria-labelledby or id (so no <label for>). Placeholder alone is not a label.',
-  },
-  {
-    id: 'autoplay-media',
-    criterion: '1.4.2',
-    kinds: ['code', 'markup'],
-    re: /<(?:video|audio)\b(?=[^>]*\bauto[pP]lay\b)(?![^>]*\bmuted\b)[^>]*>/g,
-    hint: 'Media that autoplays with sound needs a way to pause or mute it.',
-  },
-  {
-    id: 'viewport-zoom-blocked',
-    criterion: '1.4.4',
-    kinds: ['markup', 'code'],
-    re: /name\s*=\s*["']viewport["'][^>]*?(?:user-scalable\s*=\s*(?:no|0)|maximum-scale\s*=\s*1(?:\.0)?\b)/g,
-    hint: 'Viewport meta that blocks pinch zoom (axe: meta-viewport).',
-  },
-  {
-    id: 'single-key-shortcut',
-    criterion: '2.1.4',
-    kinds: ['code'],
-    re: /\.(?:key|code|keyCode|which)\s*[!=]==?\s*(?:['"](?:Key|Digit)?[A-Za-z0-9?/]['"]|KEYS\.[A-Za-z0-9]\b)/g,
-    hint: 'Keyboard handler reacting to a single character key. Fine if it requires a modifier, can be turned off or remapped, or only fires while the component has focus.',
-  },
-  {
-    id: 'forced-colors-none',
-    criterion: '9.7',
-    standard: 'EN',
-    kinds: ['code', 'style'],
-    re: /forced-color-adjust\s*:\s*none/g,
-    hint: 'EN 301 549 9.7: overrides the user high-contrast setting unless essential.',
-  },
-  {
-    id: 'html-font-size-px',
-    criterion: '9.7',
-    standard: 'EN',
-    kinds: ['code', 'style'],
-    re: /(?:^|[\s,}])html\s*\{[^}]*?font-size\s*:\s*\d+(?:\.\d+)?px/g,
-    hint: 'Root font-size in px ignores the browser default font size the user chose. Not explicit in the norm: report as low impact.',
-  },
-];
+const FILE_KINDS = {
+  code: ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs'],
+  style: ['.css', '.scss', '.less'],
+  markup: ['.html'],
+};
+const SKIPPED_DIR =
+  /(^|\/)(node_modules|dist|build|coverage|\.git|tests?|__tests__|__mocks__|locales|compatibility)(\/|$)/;
+const SKIPPED_FILE = /(\.spec\.|\.test\.|\.min\.|\.d\.ts$)/;
+const MAX_SNIPPET = 200;
+
+// EN 301 549 9.7 (user preferences) patterns are selected with the visual-presentation topic, 1.4.
+const EN_TOPIC_PROXY = '1.4.4';
+
+function parseArgs(argv) {
+  const topicFlag = argv.find((arg) => arg.startsWith('--guidelines='));
+  const topic = topicFlag
+    ? topicFlag
+        .slice('--guidelines='.length)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
+  const roots = argv.filter((arg) => !arg.startsWith('--'));
+  return { topic, roots };
+}
+
+function patternsFor(topic) {
+  return PATTERNS.filter((pattern) => {
+    const criteria = [pattern.standard === 'EN' ? EN_TOPIC_PROXY : pattern.criterion, ...(pattern.also || [])];
+    return criteria.some((criterion) => matchesTopic(criterion, topic));
+  });
+}
 
 function kindOf(file) {
   const ext = extname(file);
-  if (CODE.has(ext)) return 'code';
-  if (STYLE.has(ext)) return 'style';
-  if (MARKUP.has(ext)) return 'markup';
-  return null;
+  return Object.keys(FILE_KINDS).find((kind) => FILE_KINDS[kind].includes(ext)) || null;
 }
 
+/** Yields every file under `path` (or `path` itself), skipping ignored directories and files. */
 function* walk(path) {
-  const st = statSync(path);
-  if (st.isFile()) {
+  if (statSync(path).isFile()) {
     yield path;
     return;
   }
   for (const entry of readdirSync(path, { withFileTypes: true })) {
     const full = join(path, entry.name);
     if (entry.isDirectory()) {
-      if (!SKIP_DIR.test(`/${entry.name}/`)) yield* walk(full);
-    } else if (!SKIP_FILE.test(entry.name)) {
+      if (!SKIPPED_DIR.test(`/${entry.name}/`)) yield* walk(full);
+    } else if (!SKIPPED_FILE.test(entry.name)) {
       yield full;
     }
   }
 }
 
-const args = process.argv.slice(2);
-const topicArg = args.find((a) => a.startsWith('--guidelines='));
-const TOPIC = topicArg ? topicArg.slice('--guidelines='.length).split(',').map((s) => s.trim()).filter(Boolean) : [];
-const wants = (c) => !TOPIC.length || TOPIC.some((s) => c === s || c.startsWith(`${s}.`) || s.startsWith(`${c}.`));
-// EN 9.7 (user preferences) patterns belong with the visual-presentation topic 1.4.
-const ACTIVE = PATTERNS.filter((p) =>
-  [p.standard === 'EN' ? '1.4.4' : p.criterion, ...(p.also || [])].some((c) => wants(c)),
-);
-const roots = args.filter((a) => !a.startsWith('--'));
-if (!roots.length) {
-  console.error('usage: node static-scan.mjs <path> [<path> ...]');
-  process.exit(1);
+/** Returns a function that maps a character offset in `text` to its 1-based line number. */
+function lineLocator(text) {
+  const lineStarts = [0];
+  for (let i = text.indexOf('\n'); i !== -1; i = text.indexOf('\n', i + 1)) lineStarts.push(i + 1);
+  return (offset) => {
+    let low = 0;
+    let high = lineStarts.length - 1;
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2);
+      if (lineStarts[mid] <= offset) low = mid;
+      else high = mid - 1;
+    }
+    return low + 1;
+  };
 }
 
-const cwd = process.cwd();
-const hits = [];
-let files = 0;
-for (const root of roots) {
-  for (const file of walk(root)) {
-    const kind = kindOf(file);
-    if (!kind) continue;
-    files++;
-    const text = readFileSync(file, 'utf8');
-    for (const p of ACTIVE) {
-      if (!p.kinds.includes(kind)) continue;
-      p.re.lastIndex = 0;
-      for (let m = p.re.exec(text); m; m = p.re.exec(text)) {
-        const line = text.slice(0, m.index).split('\n').length;
-        hits.push({
-          pattern: p.id,
-          criterion: p.criterion,
-          standard: p.standard || 'WCAG',
-          file: relative(cwd, file),
-          line,
-          snippet: m[0].replace(/\s+/g, ' ').trim().slice(0, 200),
-        });
-        if (m[0].length === 0) p.re.lastIndex++;
-      }
+function* scanFile(file, kind, patterns, cwd) {
+  const text = readFileSync(file, 'utf8');
+  const lineOf = lineLocator(text);
+  for (const pattern of patterns) {
+    if (!pattern.kinds.includes(kind)) continue;
+    for (const match of text.matchAll(pattern.re)) {
+      yield {
+        pattern: pattern.id,
+        criterion: pattern.criterion,
+        standard: pattern.standard || 'WCAG',
+        file: relative(cwd, file),
+        line: lineOf(match.index),
+        snippet: match[0].replace(/\s+/g, ' ').trim().slice(0, MAX_SNIPPET),
+      };
     }
   }
 }
 
-const byPattern = {};
-for (const h of hits) byPattern[h.pattern] = (byPattern[h.pattern] || 0) + 1;
-console.log(
-  JSON.stringify(
-    { scannedFiles: files, roots, topic: TOPIC, patterns: ACTIVE.map(({ re, kinds, ...rest }) => rest), counts: byPattern, hits },
-    null,
-    2,
-  ),
-);
-console.error(`static-scan: ${files} files, ${hits.length} candidates ${JSON.stringify(byPattern)}`);
+function countBy(items, key) {
+  const counts = {};
+  for (const item of items) counts[item[key]] = (counts[item[key]] || 0) + 1;
+  return counts;
+}
+
+function main() {
+  const { topic, roots } = parseArgs(process.argv.slice(2));
+  if (!roots.length) {
+    console.error('usage: node static-scan.mjs [--guidelines=2.1,2.4] <path> [<path> ...]');
+    process.exit(1);
+  }
+
+  const patterns = patternsFor(topic);
+  const cwd = process.cwd();
+  const hits = [];
+  let scannedFiles = 0;
+  for (const root of roots) {
+    for (const file of walk(root)) {
+      const kind = kindOf(file);
+      if (!kind) continue;
+      scannedFiles++;
+      hits.push(...scanFile(file, kind, patterns, cwd));
+    }
+  }
+
+  const counts = countBy(hits, 'pattern');
+  const report = {
+    scannedFiles,
+    roots,
+    topic,
+    patterns: patterns.map(({ re, kinds, ...description }) => description),
+    counts,
+    hits,
+  };
+  console.log(JSON.stringify(report, null, 2));
+  console.error(`static-scan: ${scannedFiles} files, ${hits.length} candidates ${JSON.stringify(counts)}`);
+}
+
+main();

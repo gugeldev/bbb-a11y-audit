@@ -1,0 +1,21 @@
+{
+  "name": "bbb-a11y-audit",
+  "private": true,
+  "description": "Development tooling for the bbb-a11y-audit agent skill. The skill itself (bbb-a11y-audit/) has no dependencies.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "npm run test:scripts && npm run test:runtime",
+    "test:scripts": "node --test 'tests/scripts/*.test.mjs'",
+    "test:runtime": "playwright test --config tests/runtime/playwright.config.ts",
+    "format": "prettier --write bbb-a11y-audit/scripts bbb-a11y-audit/runtime tests",
+    "format:check": "prettier --check bbb-a11y-audit/scripts bbb-a11y-audit/runtime tests"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.56.0",
+    "prettier": "3.6.2"
+  }
+}

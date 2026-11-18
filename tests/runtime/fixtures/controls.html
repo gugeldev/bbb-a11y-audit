@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Controls fixture</title>
+    <style>
+      button:focus {
+        outline: none; /* keyboard walk: focus with no outline or shadow */
+      }
+      [role='tooltip'] {
+        position: absolute;
+        top: 80px;
+        left: 10px;
+        padding: 4px;
+        background: #333;
+        color: #fff;
+      }
+      #menu {
+        display: none;
+      }
+      .spacer {
+        height: 70px;
+      }
+      .wide {
+        width: 600px; /* reflow: wider than 320 px */
+        height: 20px;
+      }
+      .clip {
+        width: 120px;
+        height: 18px;
+        overflow: hidden;
+        white-space: nowrap;
+      }
+      .cover {
+        position: absolute; /* keyboard walk: lies over the text field, so its focus is obscured */
+        top: 100px;
+        left: 0;
+        width: 100%;
+        height: 60px;
+        background: rgba(0, 0, 0, 0.1);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- State change: a toggle that exposes its state. -->
+    <button id="mute" data-test="mute" aria-pressed="false">Mute</button>
+
+    <!-- State change: a toggle that swaps for another element instead of exposing a state. -->
+    <button id="swap" data-test="raise">raise</button>
+
+    <!-- Menu trigger: aria-expanded, a tooltip on hover and focus, focus moves into the menu. -->
+    <button id="trigger" data-test="menuTrigger" aria-expanded="false" aria-haspopup="true">Devices</button>
+    <div id="menu" role="menu">
+      <div role="menuitemradio" tabindex="-1" id="dev-1" aria-checked="true">Mic 1</div>
+      <div role="menuitemradio" tabindex="-1" id="dev-2" aria-checked="false" aria-describedby="d2 missing">Mic 2</div>
+      <span id="d2" hidden>current</span>
+    </div>
+
+    <div class="spacer"></div>
+    <input placeholder="Name" aria-label="Your name" data-testid="name" />
+    <a href="#x" title="Help">?</a>
+    <div class="wide" data-test="wide">wide</div>
+    <!-- Text spacing: fits now, clipped once WCAG spacing is applied. -->
+    <p class="clip">This text is short</p>
+    <!-- Text spacing: already clipped, so not newly clipped. -->
+    <p class="clip">Text that gets clipped when spacing grows a lot</p>
+    <div class="cover"></div>
+
+    <script>
+      const byId = (id) => document.getElementById(id);
+      const items = () => document.querySelectorAll('[role=menuitemradio]');
+
+      byId('mute').addEventListener('click', (event) => {
+        const pressed = event.currentTarget.getAttribute('aria-pressed') === 'true';
+        event.currentTarget.setAttribute('aria-pressed', String(!pressed));
+      });
+
+      byId('swap').addEventListener('click', (event) => {
+        const button = event.currentTarget;
+        button.dataset.test = button.dataset.test === 'raise' ? 'lower' : 'raise';
+        button.textContent = button.dataset.test;
+      });
+
+      const setMenuOpen = (open) => {
+        byId('menu').style.display = open ? 'block' : 'none';
+        byId('trigger').setAttribute('aria-expanded', String(open));
+        if (open) items()[0].focus();
+      };
+      byId('trigger').addEventListener('click', () => setMenuOpen(byId('menu').style.display !== 'block'));
+      byId('menu').addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') setMenuOpen(false); // focus is NOT returned to the trigger
+      });
+      items().forEach((item) =>
+        item.addEventListener('click', () =>
+          items().forEach((other) => other.setAttribute('aria-checked', String(other === item))),
+        ),
+      );
+
+      // Like tippy in BigBlueButton: the tooltip is created when shown and removed when hidden.
+      const showTip = (show) => {
+        const tip = byId('tip');
+        if (!show) {
+          tip?.remove();
+        } else if (!tip) {
+          byId('trigger').insertAdjacentHTML('afterend', '<div id="tip" role="tooltip">Choose devices</div>');
+          byId('tip').addEventListener('mouseleave', () => showTip(false));
+        }
+      };
+      byId('trigger').addEventListener('mouseenter', () => showTip(true));
+      byId('trigger').addEventListener('focus', () => showTip(true));
+      byId('trigger').addEventListener('mouseleave', () =>
+        setTimeout(() => showTip(!!byId('tip')?.matches(':hover')), 100),
+      );
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') showTip(false);
+      });
+    </script>
+  </body>
+</html>
